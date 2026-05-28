@@ -74,7 +74,7 @@ const API_KEY = '/* GF_KEY */';
 
 **After:**
 ```js
-const API_BASE = 'https://gloryfuel-pw.onrender.com/api';
+const API_BASE = 'https://pw-gloryfuel.onrender.com/api';
 const API_KEY = 'gf-pw-secret-api-key-2024';
 ```
 
