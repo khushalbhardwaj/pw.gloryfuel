@@ -378,12 +378,50 @@ function renderTopicContent(batchId, subjectSlug, topic, topicName, subjectId) {
   loadContent('videos');
 }
 
+// ---- Client-side batch categorization (mirrors server logic) ----
+const CATEGORY_RULES = [
+  ['IIT-JEE', ['\\bjee\\b','\\biit','bitsat','\\bprayas\\b','\\barjuna\\b(?!.*neet)','striker','varun','fighter','power class.*jee','power.*batch.*jee','jee crash','jee ultimate','jee t20','jee.*restart']],
+  ['NEET', ['\\bneet\\b','aiims','yakeen','dropper.*neet','saakaar(?! )','power.*batch.*neet','power class.*neet','neet.*restart','mission.*neet','neet coaching']],
+  ['UPSC', ['upsc','csat','\\bias\\b','\\bips\\b','\\bifs\\b','civil service','optional','sociology.*optional','anthropology','rpp','mains test series','select 360','weekly current affairs','idmp','upsc.*sankalp','sankalp.*upsc','sankalp.*2025','varshiki']],
+  ['Govt. Exams (State)', ['bpsc','uppsc','mppsc','mpsc','ukpsc','upsssc','bihar.*police','up.*police','daroga','rajdhani','saksham','nirnayak','bihar.*ssc','beltron','bihar.*d\\.?el\\.?ed','vikramshila','pratibha','ramban','tejas.*up','up.*arts']],
+  ['CA, CS, Banking & Finance', ['ca (foundation|inter)','cs executive','cseet','\\bcma\\b','sampurna','udesh','sarv']],
+  ['All Government Job Exams', ['ssc(?! je| )','cgl','chsl','cpo','gd constable','steno','mts','ibps','sbi ','rbi ','bank(?!ing)','banking','railway','rrb','insurance','defence','army','navy','airforce','cds','capf','police','constable','icg navik','kvs','dsssb','up tet','uptet','ctet','khakee','daksh','karmath','surya','brahmastra.*ssc','chayan(?! )','ssc exams','ssc khazana','ssc mahapack','ssc gd']],
+  ['Engineering & Medical Exams (College & Job)', ['\\bgate\\b','\\bese\\b','psu','drdo','ceptam','ae/je','ssc je','kartavya','parakram','shreshth','super 1500','electrical.*1500','vijay','riser']],
+  ['College Entrance Exams (UG & PG)', ['cuet','clat','ipmat','mht','kcet','afmc','nimcet','pw-sat','\\bnsat\\b','\\bmba\\b','pravesh','chhava','\\bnda\\b','\\bnd[^a-z]','wbjee','gpat','sarthak.*mht','sarthak.*wbjee','ssb mantra']],
+  ['Schools, Boards & Olympiads', ['class \\d','board(?! )','uday','udaan','neev','umang','junoon','champs','victory','radiant','foundation(?! )','olympiad','nsejs','nsep','nseb','ioqm','nsec','10th','11th','12th','9th','8th','7th','6th','icse','cbse','pathshala','summer camp','board booster','project','nurture','accelerate','after-school','tivr','saarthi','hunkar','sambhav','buniya','vidyapeeth','prahar','parishram','goat','sankalp','saakaar.*physics|chemistry|mathematics','fastrack','reloaded','bihar board','up board','mp board','rbse board','jac board','hindi medium','english medium','kohinoor','miq','arjuna bangla','sandesh','sip ','prastuti','curiousjr','pragati.*bangla','jeet.*crash','aarambh','pahal','smriti','parakh','mission.*hindi']],
+  ['NET Exams & Teacher Training', ['\\bnet\\b','jrf','mission.*jrf','phd','\\bshodh\\b']],
+];
+const CATEGORY_SECTIONS = [
+  { section: 'Popular Exams', categories: ['IIT-JEE', 'NEET', 'UPSC', 'Govt. Exams (State)'], prominent: true },
+  { section: 'All Exams', categories: ['Engineering & Medical Exams (College & Job)', 'College Entrance Exams (UG & PG)', 'Schools, Boards & Olympiads', 'All Government Job Exams', 'CA, CS, Banking & Finance', 'NET Exams & Teacher Training'], prominent: false },
+  { section: 'Other Offerings', categories: ['Other'], prominent: false },
+];
+
+function categorizeBatches(batches) {
+  const catMap = {};
+  batches.forEach(b => {
+    const l = (b.name || '').toLowerCase();
+    let cat = 'Other';
+    for (const [name, kws] of CATEGORY_RULES) {
+      for (const kw of kws) {
+        if (new RegExp(kw, 'i').test(l)) { cat = name; break; }
+      }
+      if (cat !== 'Other') break;
+    }
+    if (!catMap[cat]) catMap[cat] = [];
+    catMap[cat].push({ _id: b._id, name: b.name, image: b.image, slug: b.slug });
+  });
+  return { sections: CATEGORY_SECTIONS, catMap };
+}
+
 // ---- INIT ----
 async function initApp() {
   const catFilter = document.getElementById('cat-filter');
   try {
-    const resp = await apiFetch(`${API_BASE}/study/categories`);
-    const data = await resp.json();
+    // Load batches.json statically from CDN (avoids Render cold start)
+    const resp = await fetch('/batches.json');
+    const rawBatches = await resp.json();
+    const data = categorizeBatches(rawBatches);
     allBatches = data.catMap || {};
     const total = Object.values(allBatches).reduce((s, a) => s + a.length, 0);
     document.querySelector('.batch-count').textContent = `${total} batches`;
@@ -415,7 +453,7 @@ function dismissNotif() {
 
 async function checkNotification() {
   try {
-    const r = await apiFetch('/api/notification');
+    const r = await apiFetch(API_BASE + '/notification');
     const data = await r.json();
     if (data.active && data.title) {
       document.getElementById('notif-popup-title').textContent = data.title;
@@ -427,7 +465,7 @@ async function checkNotification() {
 
 async function checkMaintenance() {
   try {
-    const r = await apiFetch('/api/maintenance');
+    const r = await apiFetch(API_BASE + '/maintenance');
     const data = await r.json();
     if (data.active) {
       document.getElementById('maint-msg').textContent = data.message || 'Site is under maintenance. Please check back later.';
