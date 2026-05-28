@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GloryFuel</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box }
+body {
+  background:#0a0a0f; color:#fff; font-family:'Outfit',sans-serif;
+  min-height:100vh; display:flex; flex-direction:column; align-items:center;
+  background-image:radial-gradient(ellipse at top,rgba(124,58,237,0.08) 0%,transparent 50%),
+    radial-gradient(ellipse at bottom,rgba(168,85,247,0.05) 0%,transparent 50%);
+  padding:20px;
+}
+.container {
+  max-width:800px; width:100%; flex:1;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:40px;
+}
+.logo { font-size:52px; line-height:1; margin-bottom:4px }
+.brand {
+  font-size:32px; font-weight:900; background:linear-gradient(135deg,#a78bfa,#7c3aed);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  letter-spacing:-1px;
+}
+.tagline { color:rgba(255,255,255,0.35); font-size:15px; margin-top:4px; font-weight:400 }
+.cards { display:flex; gap:24px; width:100%; flex-wrap:wrap; justify-content:center }
+.card {
+  flex:1; min-width:260px; max-width:360px;
+  background:linear-gradient(145deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02));
+  border:1px solid rgba(255,255,255,0.07); border-radius:20px;
+  padding:36px 28px; text-align:center; cursor:pointer;
+  transition:all .35s cubic-bezier(.4,0,.2,1); text-decoration:none; color:#fff;
+  position:relative; overflow:hidden;
+}
+.card:hover {
+  transform:translateY(-6px); border-color:rgba(167,139,250,0.3);
+  box-shadow:0 20px 60px rgba(124,58,237,0.15);
+}
+.card:active { transform:translateY(-2px) }
+.card-icon { font-size:56px; margin-bottom:12px; line-height:1 }
+.card-title { font-size:22px; font-weight:700; margin-bottom:6px }
+.card-desc { color:rgba(255,255,255,0.4); font-size:13px; line-height:1.5 }
+.card-badge {
+  display:inline-block; margin-top:16px; padding:6px 16px; border-radius:20px;
+  font-size:12px; font-weight:600;
+}
+.badge-pw { background:rgba(124,58,237,0.2); color:#a78bfa }
+.badge-kh { background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.5) }
+.glow-pw::before {
+  content:''; position:absolute; top:-50%; left:-50%; width:200%; height:200%;
+  background:radial-gradient(circle at 50% 0%,rgba(124,58,237,0.08),transparent 60%);
+  pointer-events:none;
+}
+.glow-kh::before {
+  content:''; position:absolute; top:-50%; left:-50%; width:200%; height:200%;
+  background:radial-gradient(circle at 50% 0%,rgba(255,255,255,0.04),transparent 60%);
+  pointer-events:none;
+}
+.footer {
+  text-align:center; padding:20px 0; color:rgba(255,255,255,0.15); font-size:12px;
+  width:100%; max-width:800px;
+}
+@media (max-width:600px) {
+  .brand { font-size:26px }
+  .logo { font-size:42px }
+  .card { min-width:100%; padding:28px 20px }
+  .card-icon { font-size:44px }
+  .card-title { font-size:19px }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <div style="text-align:center">
+    <div class="logo">⚡</div>
+    <div class="brand">GloryFuel</div>
+    <div class="tagline">Choose your study source</div>
+  </div>
+  <div class="cards">
+    <a href="index.html?mode=pw" class="card glow-pw">
+      <div class="card-icon">🔬</div>
+      <div class="card-title">Physics Wallah</div>
+      <div class="card-desc">Latest ongoing batches, new courses, and active study content</div>
+      <div class="card-badge badge-pw">New &amp; Ongoing</div>
+    </a>
+    <a href="index.html?mode=khazana" class="card glow-kh">
+      <div class="card-icon">📚</div>
+      <div class="card-title">Khazana</div>
+      <div class="card-desc">Old recordings, archived batches, and previous year content</div>
+      <div class="card-badge badge-kh">Archived</div>
+    </a>
+  </div>
+</div>
+<div class="footer">GloryFuel &middot; Free study content</div>
+</body>
+</html>

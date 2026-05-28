@@ -417,20 +417,37 @@ function categorizeBatches(batches) {
 // ---- INIT ----
 async function initApp() {
   const catFilter = document.getElementById('cat-filter');
+  // Read mode from URL: ?mode=pw or ?mode=khazana
+  const params = new URLSearchParams(location.search);
+  const mode = params.get('mode') || 'pw';
+  const modeLabel = mode === 'khazana' ? 'Khazana' : 'Physics Wallah';
+  document.querySelector('.page-title').innerHTML = mode === 'khazana' ? '📚 Khazana' : '🔬 Physics Wallah';
   try {
     // Load batches.json statically from CDN (avoids Render cold start)
     const resp = await fetch('/batches.json');
     const rawBatches = await resp.json();
     const data = categorizeBatches(rawBatches);
     allBatches = data.catMap || {};
+    // Filter by mode (new/ongoing vs old)
+    const cutoff = Math.floor(Date.now() / 1000) - 240 * 86400; // 8 months ago
+    for (const cat of Object.keys(allBatches)) {
+      allBatches[cat] = allBatches[cat].filter(b => {
+        const ts = b._id ? parseInt(b._id.substring(0, 8), 16) : 0;
+        return mode === 'khazana' ? ts < cutoff : ts >= cutoff;
+      });
+      if (allBatches[cat].length === 0) delete allBatches[cat];
+    }
     const total = Object.values(allBatches).reduce((s, a) => s + a.length, 0);
-    document.querySelector('.batch-count').textContent = `${total} batches`;
+    document.querySelector('.batch-count').textContent = `${total} ${modeLabel} batches`;
     // Populate dropdown
     const sel = document.getElementById('cat-select');
     sel.innerHTML = '<option value="All">All Categories</option>';
-    const allCats = new Set();
-    data.sections.forEach(s => s.categories.forEach(c => allCats.add(c)));
-    allCats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
+    const allCats = new Set(Object.keys(allBatches));
+    const sections = data.sections.filter(s => s.categories.some(c => allCats.has(c)));
+    sections.forEach(s => s.categories.forEach(c => { if (allCats.has(c)) allCats.add(c); }));
+    // Only show categories that have batches
+    const activeCats = Object.keys(allBatches).sort();
+    activeCats.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; sel.appendChild(o); });
     sel.onchange = () => filterByCategory(sel.value);
     document.getElementById('search-input').oninput = () => filterBatches();
     catFilter.style.display = 'flex';
