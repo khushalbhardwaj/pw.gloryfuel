@@ -36,8 +36,7 @@ function serveWithKey(filePath, contentType) {
     });
   };
 }
-app.get('/', serveWithKey('splash.html', '.html'));
-app.get('/index.html', serveWithKey('index.html', '.html'));
+app.get('/', serveWithKey('index.html', '.html'));
 app.get('/config.js', serveWithKey('config.js', '.js'));
 app.get('/script.js', serveWithKey('script.js', '.js'));
 app.get('/admin.html', serveWithKey('admin.html', '.html'));
