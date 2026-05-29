@@ -159,7 +159,7 @@ async function deltaFetch(method, path, body) {
 // Categorize batches by name keywords
 function categorizeBatches() {
   let batches;
-  try { batches = require('./batches.json'); } catch { return []; }
+  try { const raw = require('./batches.json'); batches = Array.isArray(raw) ? raw : (raw.data || []); } catch { return { sections: [], catMap: {} }; }
   const rules = [
     ['IIT-JEE', ['\\bjee\\b','\\biit','bitsat','\\bprayas\\b','\\barjuna\\b(?!.*neet)','striker','varun','fighter','power class.*jee','power.*batch.*jee','jee crash','jee ultimate','jee t20','jee.*restart']],
     ['NEET', ['\\bneet\\b','aiims','yakeen','dropper.*neet','saakaar(?! )','power.*batch.*neet','power class.*neet','neet.*restart','mission.*neet','neet coaching']],
@@ -183,7 +183,7 @@ function categorizeBatches() {
       if (cat !== 'Other') break;
     }
     if (!catMap[cat]) catMap[cat] = [];
-    catMap[cat].push({ _id: b._id, name: b.name, image: b.image, slug: b.slug });
+    catMap[cat].push({ _id: b._id, name: b.name, image: b.image || b.previewImage || '', slug: b.slug, batchId: b.batchId || '' });
   });
   const sections = [
     { section: 'Popular Exams', categories: ['IIT-JEE', 'NEET', 'UPSC', 'Govt. Exams (State)'], prominent: true },
@@ -208,7 +208,7 @@ function filterAvailableMap(catMap) {
   const cache = getContentCache();
   const result = {};
   for (const [cat, batches] of Object.entries(catMap)) {
-    const filtered = batches.filter(b => cache[b._id] !== false);
+    const filtered = batches.filter(b => cache[b.batchId || b._id] !== false);
     if (filtered.length) result[cat] = filtered;
   }
   return result;
@@ -220,11 +220,11 @@ app.get('/api/study/categories', (req, res) => {
 });
 
 app.get('/api/study/batches', (req, res) => {
-  const { category } = req.query;
+  const { category, admin } = req.query;
   if (!category || !batchesCategorized.catMap[category]) return res.json([]);
   const cache = getContentCache();
   const sorted = [...batchesCategorized.catMap[category]]
-    .filter(b => cache[b._id] !== false)
+    .filter(b => admin ? true : (cache[b.batchId || b._id] !== false))
     .sort((a, b) => {
       const ta = a._id ? parseInt(a._id.substring(0, 8), 16) * 1000 : 0;
       const tb = b._id ? parseInt(b._id.substring(0, 8), 16) * 1000 : 0;
@@ -736,7 +736,7 @@ app.get('/api/admin/stats', adminAuth, (req, res) => {
   const stats = readJSON('stats.json', { totalVisits: 0, todayVisits: 0, lastDate: '', dailyLog: {} });
   const notification = getNotification();
   let batches;
-  try { batches = require('./batches.json'); } catch { batches = []; }
+  try { const raw = require('./batches.json'); batches = Array.isArray(raw) ? raw : (raw.data || []); } catch { batches = []; }
 
   // Batch category breakdown
   const categorized = categorizeBatches();
@@ -756,11 +756,28 @@ app.get('/api/admin/stats', adminAuth, (req, res) => {
   // Total subjects across all batches (estimate from categories)
   const totalCategories = Object.keys(categorized.catMap).length;
 
+  // Type distribution
+  const typeDist = {};
+  const langDist = {};
+  let working = 0;
+  let notWorking = 0;
+  for (const b of batches) {
+    if (b.batchId) working++; else notWorking++;
+    const t = b.type || 'UNKNOWN';
+    typeDist[t] = (typeDist[t] || 0) + 1;
+    const l = b.language || 'Unknown';
+    langDist[l] = (langDist[l] || 0) + 1;
+  }
+
   res.json({
     totalBatches: batches.length,
     recentBatches,
     totalCategories,
     categoryStats,
+    typeDistribution: typeDist,
+    languageDistribution: langDist,
+    workingCount: working,
+    notWorkingCount: notWorking,
     visits: {
       total: stats.totalVisits || 0,
       today: stats.todayVisits || 0,

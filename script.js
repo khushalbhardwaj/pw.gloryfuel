@@ -68,16 +68,28 @@ function renderBatches(batches, append) {
   }
 
   slice.forEach((b, i) => {
-    const bid = b._id || b.id || b.slug || `batch-${i}`;
+    const batchId = b.batchId || '';
+    const hasContent = !!batchId;
+    const bid = batchId || b._id || b.id || b.slug || `batch-${i}`;
     const name = b.name || 'Unknown Batch';
     const img = b.image || b.thumbnail || '';
     const isFav = favs.includes(bid);
 
     const card = document.createElement('div');
-    card.className = `card${isFav ? ' fav-card' : ''}`;
+    card.className = `card${isFav ? ' fav-card' : ''}${!hasContent ? ' disabled-card' : ''}`;
     card.id = `card-${bid}`;
     card.style.animationDelay = `${(i % PAGE_SIZE) * 0.04}s`;
-    card.onclick = () => openBatchView(bid, name);
+    if (hasContent) card.onclick = () => openBatchView(batchId, name);
+
+    let btnHtml = '';
+    if (hasContent) {
+      btnHtml = `<button class="study-btn" onclick="event.stopPropagation(); openBatchView('${batchId}', '${name.replace(/'/g, "\\'")}')">
+          Let's Study
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>
+        </button>`;
+    } else {
+      btnHtml = `<div class="no-content-badge">No Content</div>`;
+    }
 
     card.innerHTML = `
       <button class="heart-btn${isFav ? ' active' : ''}" onclick="toggleFav(event, '${bid}')" title="Favourite mein add karo">
@@ -89,10 +101,7 @@ function renderBatches(batches, append) {
       </div>
       <div class="card-body">
         <div class="card-name">${name}</div>
-        <button class="study-btn" onclick="event.stopPropagation(); openBatchView('${bid}', '${name.replace(/'/g, "\\'")}')">
-          Let's Study
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"></path></svg>
-        </button>
+        ${btnHtml}
       </div>`;
     grid.appendChild(card);
   });
@@ -131,8 +140,10 @@ function filterByCategory(category) {
 
 function sortByRecent(batches) {
   return batches.sort((a, b) => {
-    const ta = a._id ? parseInt(a._id.substring(0, 8), 16) * 1000 : 0;
-    const tb = b._id ? parseInt(b._id.substring(0, 8), 16) * 1000 : 0;
+    const idA = a._id || a.batchId || '';
+    const idB = b._id || b.batchId || '';
+    const ta = idA ? parseInt(idA.substring(0, 8), 16) * 1000 : 0;
+    const tb = idB ? parseInt(idB.substring(0, 8), 16) * 1000 : 0;
     return tb - ta;
   });
 }
@@ -153,7 +164,7 @@ window.toggleFav = function (e, id) {
 function getFavBatches() {
   const all = [];
   Object.values(allBatches).forEach(arr => arr.forEach(b => all.push(b)));
-  return all.filter(b => favs.includes(b._id || b.id || b.slug));
+  return all.filter(b => favs.includes(b.batchId || b._id || b.id || b.slug));
 }
 
 function updateFavCount() {
@@ -409,7 +420,7 @@ function categorizeBatches(batches) {
       if (cat !== 'Other') break;
     }
     if (!catMap[cat]) catMap[cat] = [];
-    catMap[cat].push({ _id: b._id, name: b.name, image: b.image, slug: b.slug });
+    catMap[cat].push({ _id: b._id, name: b.name, image: b.image || b.previewImage || '', slug: b.slug, batchId: b.batchId || '' });
   });
   return { sections: CATEGORY_SECTIONS, catMap };
 }
@@ -421,7 +432,8 @@ async function initApp() {
     // Load batches.json statically from CDN (avoids Render cold start)
     const resp = await fetch('/batches.json');
     const rawBatches = await resp.json();
-    const data = categorizeBatches(rawBatches);
+    const batchArray = rawBatches.data || rawBatches.batches || rawBatches;
+    const data = categorizeBatches(batchArray);
     allBatches = data.catMap || {};
     const total = Object.values(allBatches).reduce((s, a) => s + a.length, 0);
     document.querySelector('.batch-count').textContent = `${total} batches`;

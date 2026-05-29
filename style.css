@@ -147,6 +147,27 @@ header {
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(167, 139, 250, 0.08);
 }
 
+.card.disabled-card {
+    opacity: 0.45;
+    cursor: default;
+    filter: grayscale(0.5);
+}
+.card.disabled-card:hover {
+    transform: none;
+    border-color: rgba(255, 255, 255, 0.07);
+    box-shadow: none;
+}
+
+.no-content-badge {
+    display: inline-block;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    letter-spacing: 0.3px;
+}
+
 .card.fav-card {
     border-color: rgba(251, 113, 133, 0.35);
     box-shadow: 0 0 0 1px rgba(251, 113, 133, 0.12) inset;

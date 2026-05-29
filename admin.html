@@ -62,6 +62,21 @@
       .stat-card.traffic .mini-chart { display:flex; align-items:flex-end; gap:6px; height:48px; margin-top:12px }
       .stat-card.traffic .mini-chart .bar { flex:1; border-radius:4px 4px 0 0; min-height:4px; transition:height .6s ease; position:relative }
       .stat-card.traffic .mini-chart .bar-label { position:absolute; bottom:-18px; left:50%; transform:translateX(-50%); font-size:9px; color:rgba(255,255,255,0.2); white-space:nowrap }
+      /* Stat card accent line */
+      .stat-accent { position:absolute; top:0; left:0; right:0; height:3px; border-radius:16px 16px 0 0; opacity:0.6 }
+      /* Progress bar inside card */
+      .stat-bar { height:4px; background:rgba(255,255,255,0.06); border-radius:2px; margin-top:8px; overflow:hidden }
+      .stat-bar-fill { height:100%; border-radius:2px; transition:width .8s ease }
+      .stat-bar-label { font-size:10px; color:rgba(255,255,255,0.2); margin-top:3px }
+      /* Distribution cards */
+      .stat-card.dist-card { grid-column:span 1 }
+      .tag-group { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px }
+      .tag { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; padding:4px 10px; border-radius:8px; border:1px solid; letter-spacing:0.2px }
+      .tag em { font-style:normal; font-weight:800; opacity:0.7 }
+      @media (min-width:901px) {
+        .stat-card.dist-card { min-height:110px }
+        .stat-card:not(.traffic):not(.dist-card) { min-height:130px }
+      }
       /* Category panel (shown on sidebar click) */
       .cat-detail-card { background:#111119; border:1px solid rgba(255,255,255,0.06); border-radius:16px; padding:20px }
       .cat-detail-card .cat-detail-header { display:flex; align-items:center; gap:12px; margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.05) }
@@ -114,6 +129,7 @@
       @media (max-width:900px) {
         .stat-grid { grid-template-columns:repeat(2,1fr) }
         .stat-card.traffic { grid-column:span 2 }
+        .stat-card.dist-card { grid-column:span 1 }
       }
       @media (max-width:768px) {
         .hamburger { display:flex }
@@ -320,6 +336,8 @@
       token = null; showLogin();
     }
 
+    const CAT_COLORS = ['#a78bfa','#fbbf24','#34d399','#fb7185','#38bdf8','#f97316','#22c55e','#e879f9','#facc15','#2dd4bf','#818cf8','#f472b6','#94a3b8'];
+
     async function loadStats() {
       const data = await api('GET', '/api/admin/stats');
       if (!data) return;
@@ -329,23 +347,43 @@
       const grid = document.getElementById('stats-grid');
       const todayVisits = data.visits?.dailyLog || {};
       grid.innerHTML = '';
-      const cards = [
-        { num: data.totalBatches, label: 'Total Batches', sub: data.recentBatches + ' new in 30d', icon: '📚', color: '#a78bfa' },
+
+      const typeDist = data.typeDistribution || {};
+      const typeTags = Object.entries(typeDist).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([t, c]) => `<span class="tag" style="background:#f9731615;color:#f97316;border-color:#f9731630">${t} <em>${c}</em></span>`).join('');
+
+      const langDist = data.languageDistribution || {};
+      const langTags = Object.entries(langDist).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([l, c]) => `<span class="tag" style="background:#06b6d415;color:#06b6d4;border-color:#06b6d430">${l} <em>${c}</em></span>`).join('');
+
+      const pct = (data.workingCount / data.totalBatches * 100).toFixed(1);
+      const mainCards = [
+        { num: data.totalBatches, label: 'Total Batches', sub: data.recentBatches + ' new (30d)', icon: '📚', color: '#a78bfa' },
+        { num: data.workingCount, label: 'With Content', sub: pct + '% of all batches', icon: '✅', color: '#22c55e', bar: true, barPct: pct },
         { num: data.totalCategories, label: 'Categories', sub: Object.keys(catData).length + ' total', icon: '📁', color: '#fbbf24' },
         { num: data.visits.total, label: 'Total Visits', sub: data.visits.today + ' today', icon: '👁', color: '#34d399' },
         { num: data.notification.hasActive ? 'Live' : 'Off', label: 'Notification', sub: data.notification.hasActive ? data.notification.title : 'No active', icon: '🔔', color: data.notification.hasActive ? '#22c55e' : '#6b7280' },
       ];
-      cards.forEach(c => {
+      mainCards.forEach(c => {
         const d = document.createElement('div'); d.className = 'stat-card';
-        d.innerHTML = `<div class="stat-icon" style="background:${c.color}15;color:${c.color}">${c.icon}</div><div class="num" style="color:${c.color}">${c.num}</div><div class="label">${c.label}</div><div class="sub">${c.sub}</div>`;
+        let extra = '';
+        if (c.bar) extra = `<div class="stat-bar"><div class="stat-bar-fill" style="width:${c.barPct}%;background:${c.color}"></div></div><div class="stat-bar-label">${c.barPct}% working</div>`;
+        d.innerHTML = `<div class="stat-accent" style="background:${c.color}"></div><div class="stat-icon" style="background:${c.color}15;color:${c.color}">${c.icon}</div><div class="num" style="color:${c.color}">${c.num}</div><div class="label">${c.label}</div><div class="sub">${c.sub}${extra}</div>`;
         grid.appendChild(d);
       });
+
+      // Type & Language distribution cards
+      const dl = document.createElement('div'); dl.className = 'stat-card dist-card';
+      dl.innerHTML = `<div class="stat-accent" style="background:#f97316"></div><div class="stat-icon" style="background:#f9731615;color:#f97316">🏷</div><div class="label">Type Distribution</div><div class="tag-group">${typeTags || '<span style="color:rgba(255,255,255,0.15);font-size:12px">No data</span>'}</div>`;
+      grid.appendChild(dl);
+      const ll = document.createElement('div'); ll.className = 'stat-card dist-card';
+      ll.innerHTML = `<div class="stat-accent" style="background:#06b6d4"></div><div class="stat-icon" style="background:#06b6d415;color:#06b6d4">🌐</div><div class="label">Language Distribution</div><div class="tag-group">${langTags || '<span style="color:rgba(255,255,255,0.15);font-size:12px">No data</span>'}</div>`;
+      grid.appendChild(ll);
+
       // Traffic mini-chart
       const days = [];
       for (let i = 6; i >= 0; i--) { const d = new Date(); d.setDate(d.getDate() - i); const key = d.toISOString().slice(0,10); days.push({ label: key.slice(5), count: todayVisits[key] || 0 }); }
       const maxCount = Math.max(...days.map(d => d.count), 1);
       const tc = document.createElement('div'); tc.className = 'stat-card traffic';
-      tc.innerHTML = `<div class="stat-icon" style="background:rgba(56,189,248,0.12);color:#38bdf8">📈</div><div class="num" style="color:#38bdf8">${data.visits.today || 0}</div><div class="label">Today's Visits</div><div class="sub">Last 7 days</div><div class="mini-chart">${days.map(d => `<div class="bar" style="height:${Math.max(4,(d.count/maxCount)*44)}px;background:linear-gradient(to top,#38bdf8,rgba(56,189,248,0.4))" title="${d.count} visits"><span class="bar-label">${d.label}</span></div>`).join('')}</div>`;
+      tc.innerHTML = `<div class="stat-accent" style="background:#38bdf8"></div><div class="stat-icon" style="background:rgba(56,189,248,0.12);color:#38bdf8">📈</div><div class="num" style="color:#38bdf8">${data.visits.today || 0}</div><div class="label">Today's Visits</div><div class="sub">Last 7 days</div><div class="mini-chart">${days.map(d => `<div class="bar" style="height:${Math.max(4,(d.count/maxCount)*44)}px;background:linear-gradient(to top,#38bdf8,rgba(56,189,248,0.4))" title="${d.count} visits"><span class="bar-label">${d.label}</span></div>`).join('')}</div>`;
       grid.appendChild(tc);
 
       // Sidebar categories
@@ -445,8 +483,8 @@
 
       // Fetch batches for this category
       try {
-        const r = await fetch(ADMIN_BASE + '/api/study/batches?category=' + encodeURIComponent(name));
-        const batches = await r.json();
+        const r = await api('GET', '/api/study/batches?category=' + encodeURIComponent(name) + '&admin=1');
+        const batches = r;
         const list = document.getElementById('cat-batch-list');
         if (!batches || batches.length === 0) {
           list.innerHTML = '<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.2)">No batches found</div>';
