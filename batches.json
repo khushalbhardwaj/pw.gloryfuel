@@ -11934,6 +11934,19 @@
       "type": "REGULAR",
       "slug": "",
       "batchId": "670f4ace8d9339f9a287ade5"
+    },
+    {
+      "_id": "6954e2a08e0ee2b956f2b595",
+      "name": "Arjuna Bangla (WBJEE + Biology) 2027",
+      "byName": "WBJEE aspirants",
+      "startDate": "27 Apr 2026",
+      "endDate": "01 Jun 2028",
+      "language": "Bangla",
+      "previewImage": "https://static.pw.live/5eb393ee95fab7468a79d189/ADMIN/8957eeef-8a60-445d-97d5-f54592ba55db.png",
+      "feeTotal": 4600,
+      "type": "E_BATCH",
+      "slug": "arjuna-bangla--wbjee---biology--2027-613123",
+      "batchId": "6954e2a08e0ee2b956f2b595"
     }
   ]
 }

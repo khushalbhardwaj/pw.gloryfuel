@@ -420,7 +420,7 @@ function categorizeBatches(batches) {
       if (cat !== 'Other') break;
     }
     if (!catMap[cat]) catMap[cat] = [];
-    catMap[cat].push({ _id: b._id, name: b.name, image: b.image || b.previewImage || '', slug: b.slug, batchId: b.batchId || '' });
+    catMap[cat].push({ _id: b._id, name: b.name, image: b.image || b.previewImage || '', slug: b.slug, batchId: b.batchId || b._id || '' });
   });
   return { sections: CATEGORY_SECTIONS, catMap };
 }
@@ -429,8 +429,8 @@ function categorizeBatches(batches) {
 async function initApp() {
   const catFilter = document.getElementById('cat-filter');
   try {
-    // Load batches.json statically from CDN (avoids Render cold start)
-    const resp = await fetch('/batches.json');
+    // Load batches from LearnByAKP API
+    const resp = await apiFetch(API_BASE + '/batches/list');
     const rawBatches = await resp.json();
     const batchArray = rawBatches.data || rawBatches.batches || rawBatches;
     const data = categorizeBatches(batchArray);
