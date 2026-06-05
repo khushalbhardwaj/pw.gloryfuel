@@ -44,7 +44,7 @@ app.get('/player.html', serveWithKey('player.html', '.html'));
 
 // All /api/* routes require the API key (except those in skip list)
 function apiAuth(req, res, next) {
-  const skip = ['/study/mpd', '/study/proxy', '/study/view', '/study/download', '/notification', '/maintenance'];
+  const skip = ['/study/mpd', '/study/proxy', '/study/view', '/study/download', '/notification', '/maintenance', '/batches/list'];
   if (skip.some(p => req.path === p || req.path.startsWith(p + '?'))) return next();
   console.log(`Auth check: path="${req.path}" originalUrl="${req.originalUrl}"`);
   const key = req.headers['x-api-key'] || req.query.key;
