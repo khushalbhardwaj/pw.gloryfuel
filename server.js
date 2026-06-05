@@ -56,16 +56,18 @@ function apiAuth(req, res, next) {
 }
 app.use('/api', apiAuth);
 
-// ---- Persistence helpers ----
+// ---- Persistence helpers (in-memory fallback for Vercel) ----
+const memCache = {};
 const DATA_DIR = path.join(__dirname, 'data');
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!fs.existsSync(DATA_DIR)) { try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {} }
 
 function readJSON(file, fallback) {
   try { return JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8')); }
-  catch { return fallback; }
+  catch { return file in memCache ? memCache[file] : fallback; }
 }
 function writeJSON(file, data) {
-  fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2));
+  memCache[file] = data;
+  try { fs.writeFileSync(path.join(DATA_DIR, file), JSON.stringify(data, null, 2)); } catch {}
 }
 
 // ---- Visit tracking ----
@@ -125,11 +127,39 @@ function decryptAESGCM(encrypted) {
   return JSON.parse(decrypted.toString('utf8'));
 }
 
-const STUDY_API = 'https://apiserver.deltastudy.site';
+// ---- Multi-source proxy with fallback ----
+const PROXY_SOURCES = [
+  { name: 'Delta Study (primary)', base: 'https://apiserver.deltastudy.site' },
+  { name: 'Delta Study (alt)',      base: 'https://deltastudy.site' },
+  { name: 'LearnByAKP', base: 'https://learnbyakp.onrender.com', referer: 'https://learnbyakp.online/' },
+];
+let sourceHealth = {};
+PROXY_SOURCES.forEach(s => sourceHealth[s.name] = true);
+let lastSourceCheck = 0;
+
+async function checkAllSources() {
+  for (const s of PROXY_SOURCES) {
+    try {
+      await axios.head(s.base, { timeout: 3000 });
+      sourceHealth[s.name] = true;
+    } catch {
+      sourceHealth[s.name] = false;
+    }
+  }
+  lastSourceCheck = Date.now();
+}
+setInterval(checkAllSources, 30000);
+checkAllSources();
+function isAnySourceAlive() { return Object.values(sourceHealth).some(v => v); }
+
+// Convenience ref to primary proxy source
+const STUDY_API = PROXY_SOURCES[0].base;
+
+
 
 // Cache signed CDN params so segment proxies can attach them
 const signedParamsCache = new Map();
-const PARAM_TTL = 10 * 60 * 1000; // 10 min
+const PARAM_TTL = 10 * 60 * 1000;
 setInterval(() => {
   const now = Date.now();
   for (const [key, entry] of signedParamsCache) {
@@ -137,29 +167,109 @@ setInterval(() => {
   }
 }, 60000);
 
-// Helper: call Delta Study API, return (decrypted body, http status)
+// Endpoint-specific cache directories
+const EP_CACHE = {
+  'batchdetails': { dir: path.join(DATA_DIR, 'details_cache') },
+  'topics':       { dir: path.join(DATA_DIR, 'topics_cache') },
+  'datacontent':  { dir: path.join(DATA_DIR, 'content_cache') },
+};
+
+function cacheFilePath(type, key) {
+  const cfg = EP_CACHE[type];
+  if (!cfg) return null;
+  if (!fs.existsSync(cfg.dir)) fs.mkdirSync(cfg.dir, { recursive: true });
+  return path.join(cfg.dir, `${key}.json`);
+}
+function readCache(type, key) {
+  const fp = cacheFilePath(type, key);
+  if (fp && fs.existsSync(fp)) {
+    try { return JSON.parse(fs.readFileSync(fp, 'utf8')); } catch {}
+  }
+  return null;
+}
+function writeCache(type, key, data) {
+  const fp = cacheFilePath(type, key);
+  if (fp) {
+    try { fs.writeFileSync(fp, JSON.stringify(data, null, 2)); } catch {}
+  }
+}
+
+// Multi-source fetch with retry + cache fallback
+async function multiSourceFetch(method, path, body, cacheType, cacheKey) {
+  // 1. Try cache first
+  if (cacheType && cacheKey) {
+    const cached = readCache(cacheType, cacheKey);
+    if (cached) return { status: 200, body: cached, source: 'cache' };
+  }
+
+  // 2. Try each proxy source
+  if (Date.now() - lastSourceCheck > 10000) await checkAllSources();
+  const alive = PROXY_SOURCES.filter(s => sourceHealth[s.name]);
+  const tried = [];
+
+  for (const s of (alive.length ? alive : PROXY_SOURCES)) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const cfg = { method, url: `${s.base}${path}`, timeout: 15000, validateStatus: () => true };
+        if (body) cfg.data = body;
+        if (s.referer) cfg.headers = { Referer: s.referer, Origin: new URL(s.referer).origin };
+        const resp = await axios(cfg);
+        let decrypted;
+        try { decrypted = decryptAESGCM(resp.data.data); } catch { decrypted = resp.data; }
+        // Cache successful decrypted response
+        if (decrypted?.success !== false && cacheType && cacheKey) {
+          writeCache(cacheType, cacheKey, decrypted);
+        }
+        sourceHealth[s.name] = true;
+        return { status: resp.status, body: decrypted, source: s.name };
+      } catch (e) {
+        sourceHealth[s.name] = false;
+        tried.push(`${s.name} attempt ${attempt}: ${e.message?.substring(0,60)}`);
+        if (attempt < 2) await new Promise(r => setTimeout(r, 1000 * attempt));
+      }
+    }
+  }
+
+  // 3. Final fallback: try cache again (might have been written by another request)
+  if (cacheType && cacheKey) {
+    const cached = readCache(cacheType, cacheKey);
+    if (cached) return { status: 200, body: cached, source: 'cache' };
+  }
+
+  return { status: 503, body: { success: false, error: 'All sources unavailable' }, source: 'none', errors: tried };
+}
+
+// Helper: call Delta Study API (kept for backward compat, new code uses multiSourceFetch)
 async function deltaFetch(method, path, body) {
-  const cfg = {
-    method,
-    url: `${STUDY_API}${path}`,
-    timeout: 15000,
-    validateStatus: () => true,
-  };
+  const cfg = { method, url: `${PROXY_SOURCES[0].base}${path}`, timeout: 15000, validateStatus: () => true };
   if (body) cfg.data = body;
   const resp = await axios(cfg);
   let decrypted;
-  try {
-    decrypted = decryptAESGCM(resp.data.data);
-  } catch {
-    return { status: resp.status, body: resp.data };
-  }
+  try { decrypted = decryptAESGCM(resp.data.data); }
+  catch { return { status: resp.status, body: resp.data }; }
   return { status: resp.status, body: decrypted };
 }
 
+// Batches cache populated from LearnByAKP
+let cachedBatches = null;
+
+async function refreshBatchesCache() {
+  try {
+    const resp = await axios.get(AKP_BATCHES_LIST, { timeout: 30000 });
+    const data = resp.data;
+    cachedBatches = Array.isArray(data) ? data : (data.data || data.batches || []);
+  } catch {
+    cachedBatches = [];
+  }
+}
+refreshBatchesCache();
+
 // Categorize batches by name keywords
-function categorizeBatches() {
-  let batches;
-  try { const raw = require('./batches.json'); batches = Array.isArray(raw) ? raw : (raw.data || []); } catch { return { sections: [], catMap: {} }; }
+function categorizeBatches(batches) {
+  if (!batches) {
+    batches = cachedBatches || [];
+  }
+  if (!batches.length) return { sections: [], catMap: {} };
   const rules = [
     ['IIT-JEE', ['\\bjee\\b','\\biit','bitsat','\\bprayas\\b','\\barjuna\\b(?!.*neet)','striker','varun','fighter','power class.*jee','power.*batch.*jee','jee crash','jee ultimate','jee t20','jee.*restart']],
     ['NEET', ['\\bneet\\b','aiims','yakeen','dropper.*neet','saakaar(?! )','power.*batch.*neet','power class.*neet','neet.*restart','mission.*neet','neet coaching']],
@@ -183,7 +293,7 @@ function categorizeBatches() {
       if (cat !== 'Other') break;
     }
     if (!catMap[cat]) catMap[cat] = [];
-    catMap[cat].push({ _id: b._id, name: b.name, image: b.image || b.previewImage || '', slug: b.slug, batchId: b.batchId || '' });
+    catMap[cat].push({ _id: b._id, name: b.name, image: b.image || b.previewImage || '', slug: b.slug, batchId: b.batchId || b._id || '' });
   });
   const sections = [
     { section: 'Popular Exams', categories: ['IIT-JEE', 'NEET', 'UPSC', 'Govt. Exams (State)'], prominent: true },
@@ -233,6 +343,46 @@ app.get('/api/study/batches', (req, res) => {
   res.json(sorted);
 });
 
+// ---- LearnByAKP proxy ----
+const AKP_SHEET = 'https://opensheet.elk.sh/1dyjS6Im6bejI29K6RutDoCmXBWmsPynmXqOwezLgP8o/Sheet1';
+const AKP_BATCHES_LIST = 'https://raw.githubusercontent.com/akp-la/Learnbyakp/refs/heads/main/apv/batches.json';
+
+app.get('/api/batches/list', async (req, res) => {
+  try {
+    const resp = await axios.get(AKP_BATCHES_LIST, { timeout: 30000 });
+    res.json(resp.data);
+  } catch {
+    res.status(502).json({ error: 'Failed to fetch batches' });
+  }
+});
+
+app.get('/api/learnbyakp/batches', async (req, res) => {
+  try {
+    // LearnByAKP's data is backed by this Google Sheet (accessed via opensheet.elk.sh)
+    const resp = await axios.get(AKP_SHEET, { timeout: 30000 });
+    const rows = resp.data;
+    const batches = [...new Set(rows.map(r => r.batch).filter(Boolean))];
+    res.json({ success: true, total: rows.length, batches });
+  } catch (err) {
+    res.status(502).json({ error: 'LearnByAKP unavailable', detail: err.message });
+  }
+});
+
+app.get('/api/learnbyakp/resources', async (req, res) => {
+  const { batch, className, subject, category } = req.query;
+  try {
+    const resp = await axios.get(AKP_SHEET, { timeout: 30000 });
+    let filtered = resp.data;
+    if (batch) filtered = filtered.filter(r => r.batch?.toLowerCase() === batch.toLowerCase());
+    if (className) filtered = filtered.filter(r => r.className?.toLowerCase() === className.toLowerCase());
+    if (subject) filtered = filtered.filter(r => r.subject?.toLowerCase() === subject.toLowerCase());
+    if (category) filtered = filtered.filter(r => r.category?.toLowerCase() === category.toLowerCase());
+    res.json({ success: true, count: filtered.length, data: filtered });
+  } catch (err) {
+    res.status(502).json({ error: 'LearnByAKP unavailable', detail: err.message });
+  }
+});
+
 // Check batch content availability (lazy check, caches result)
 app.get('/api/study/check-batch', async (req, res) => {
   const { batchId } = req.query;
@@ -240,12 +390,12 @@ app.get('/api/study/check-batch', async (req, res) => {
   const cache = getContentCache();
   if (batchId in cache) return res.json({ available: cache[batchId], cached: true });
   try {
-    const batchResp = await deltaFetch('POST', '/api/pw/batchdetails', { searchParams: { BatchId: batchId } });
+    const batchResp = await multiSourceFetch('POST', '/api/pw/batchdetails', { searchParams: { BatchId: batchId } }, 'batchdetails', batchId);
     if (!batchResp.body?.success || !batchResp.body.data?.subjects?.length) {
       setContentCache(batchId, false); return res.json({ available: false });
     }
     const sub = batchResp.body.data.subjects[0];
-    const topResp = await deltaFetch('GET', `/api/pw/topics?BatchId=${encodeURIComponent(batchId)}&SubjectId=${encodeURIComponent(sub._id)}`);
+    const topResp = await multiSourceFetch('GET', `/api/pw/topics?BatchId=${encodeURIComponent(batchId)}&SubjectId=${encodeURIComponent(sub._id)}`, null, 'topics', `${batchId}_${sub._id}`);
     if (!topResp.body?.success || !topResp.body.data?.length) {
       setContentCache(batchId, false); return res.json({ available: false });
     }
@@ -253,7 +403,7 @@ app.get('/api/study/check-batch', async (req, res) => {
     if (!topicWithVideos) {
       setContentCache(batchId, false); return res.json({ available: false });
     }
-    const dcResp = await deltaFetch('GET', `/api/pw/datacontent?batchId=${encodeURIComponent(batchId)}&subjectSlug=${encodeURIComponent(sub.slug)}&topicSlug=${encodeURIComponent(topicWithVideos.slug)}&contentType=videos`);
+    const dcResp = await multiSourceFetch('GET', `/api/pw/datacontent?batchId=${encodeURIComponent(batchId)}&subjectSlug=${encodeURIComponent(sub.slug)}&topicSlug=${encodeURIComponent(topicWithVideos.slug)}&contentType=videos`, null, 'datacontent', `${batchId}_${sub.slug}_${topicWithVideos.slug}_videos`);
     if (!dcResp.body?.success || !dcResp.body.data?.length) {
       setContentCache(batchId, false); return res.json({ available: false });
     }
@@ -262,8 +412,16 @@ app.get('/api/study/check-batch', async (req, res) => {
     if (!childId) {
       setContentCache(batchId, false); return res.json({ available: false });
     }
-    const vResp = await axios.get(`${STUDY_API}/api/pw/video-url-details?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(childId)}&subjectId=${encodeURIComponent(sub._id)}`, { timeout: 10000, validateStatus: () => true });
-    const available = !!(vResp.data?.success && vResp.data?.data?.[0]?.url);
+    // Try each source for the unencrypted video-url endpoint
+    let available = false;
+    for (const s of PROXY_SOURCES) {
+      try {
+        const vResp = await axios.get(`${s.base}/api/pw/video-url-details?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(childId)}&subjectId=${encodeURIComponent(sub._id)}`, { timeout: 10000, validateStatus: () => true });
+        if (vResp.data?.success && vResp.data?.data?.[0]?.url) {
+          available = true; break;
+        }
+      } catch {}
+    }
     setContentCache(batchId, available);
     res.json({ available });
   } catch (err) {
@@ -287,11 +445,8 @@ app.post('/api/study/batch-details', async (req, res) => {
     } catch {}
   }
   try {
-    const { status, body } = await deltaFetch('POST', '/api/pw/batchdetails', { searchParams: { BatchId: batchId } });
-    if (status === 200 && body?.success) {
-      fs.writeFile(cachePath, JSON.stringify(body), () => {});
-    }
-    res.status(status).json(body);
+    const result = await multiSourceFetch('POST', '/api/pw/batchdetails', { searchParams: { BatchId: batchId } }, 'batchdetails', batchId);
+    res.status(result.status).json(result.body);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -303,19 +458,9 @@ if (!fs.existsSync(TOPICS_CACHE_DIR)) fs.mkdirSync(TOPICS_CACHE_DIR, { recursive
 app.get('/api/study/topics', async (req, res) => {
   const { batchId, subjectId } = req.query;
   if (!batchId || !subjectId) return res.status(400).json({ error: 'batchId and subjectId required' });
-  const cachePath = path.join(TOPICS_CACHE_DIR, `${batchId}_${subjectId}.json`);
-  if (fs.existsSync(cachePath)) {
-    try {
-      const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-      return res.status(200).json(cached);
-    } catch {}
-  }
   try {
-    const { status, body } = await deltaFetch('GET', `/api/pw/topics?BatchId=${encodeURIComponent(batchId)}&SubjectId=${encodeURIComponent(subjectId)}`);
-    if (status === 200 && body?.success) {
-      fs.writeFile(cachePath, JSON.stringify(body), () => {});
-    }
-    res.status(status).json(body);
+    const result = await multiSourceFetch('GET', `/api/pw/topics?BatchId=${encodeURIComponent(batchId)}&SubjectId=${encodeURIComponent(subjectId)}`, null, 'topics', `${batchId}_${subjectId}`);
+    res.status(result.status).json(result.body);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -327,8 +472,8 @@ app.get('/api/study/datacontent', async (req, res) => {
     return res.status(400).json({ error: 'batchId, subjectSlug, topicSlug, contentType required' });
   }
   try {
-    const { status, body } = await deltaFetch('GET', `/api/pw/datacontent?batchId=${encodeURIComponent(batchId)}&subjectSlug=${encodeURIComponent(subjectSlug)}&topicSlug=${encodeURIComponent(topicSlug)}&contentType=${encodeURIComponent(contentType)}`);
-    res.status(status).json(body);
+    const result = await multiSourceFetch('GET', `/api/pw/datacontent?batchId=${encodeURIComponent(batchId)}&subjectSlug=${encodeURIComponent(subjectSlug)}&topicSlug=${encodeURIComponent(topicSlug)}&contentType=${encodeURIComponent(contentType)}`, null, 'datacontent', `${batchId}_${subjectSlug}_${topicSlug}_${contentType}`);
+    res.status(result.status).json(result.body);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -338,8 +483,8 @@ app.post('/api/study/today', async (req, res) => {
   const { batchId } = req.body;
   if (!batchId) return res.status(400).json({ error: 'batchId required' });
   try {
-    const { status, body } = await deltaFetch('POST', '/api/pw/batchdetails', { searchParams: { BatchId: batchId } });
-    if (!body.success) return res.status(400).json({ error: 'batch details failed' });
+    const { status, body } = await multiSourceFetch('POST', '/api/pw/batchdetails', { searchParams: { BatchId: batchId } }, 'batchdetails', batchId);
+    if (status !== 200 || !body.success) return res.status(400).json({ error: 'batch details failed' });
     const subjects = body.data?.subjects || [];
     const today = new Date().toISOString().slice(0, 10);
     const items = [];
@@ -372,8 +517,8 @@ app.get('/api/study/attachments', async (req, res) => {
     return res.status(400).json({ error: 'BatchId, SubjectId, ContentId required' });
   }
   try {
-    const { status, body } = await deltaFetch('GET', `/api/pw/attachments-url?BatchId=${encodeURIComponent(BatchId)}&SubjectId=${encodeURIComponent(SubjectId)}&ContentId=${encodeURIComponent(ContentId)}`);
-    res.status(status).json(body);
+    const result = await multiSourceFetch('GET', `/api/pw/attachments-url?BatchId=${encodeURIComponent(BatchId)}&SubjectId=${encodeURIComponent(SubjectId)}&ContentId=${encodeURIComponent(ContentId)}`, null, null, null);
+    res.status(result.status).json(result.body);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -383,21 +528,25 @@ app.get('/api/study/attachments', async (req, res) => {
 app.get('/api/study/video-url', async (req, res) => {
   const { batchId, childId, subjectId, subjectSlug } = req.query;
   if (!batchId || !childId) return res.status(400).json({ error: 'batchId, childId required' });
-  // Try unencrypted video-url-details first
-  if (subjectId) {
-    const resp = await axios.get(`${STUDY_API}/api/pw/video-url-details?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(childId)}&subjectId=${encodeURIComponent(subjectId)}`, { timeout: 15000, validateStatus: () => true });
-    if (resp.data?.success && resp.data?.data?.[0]?.url) {
-      return res.json(resp.data);
-    }
+  // Try each source for unencrypted video-url-details
+  for (const s of PROXY_SOURCES) {
+    try {
+      const resp = await axios.get(`${s.base}/api/pw/video-url-details?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(childId)}&subjectId=${encodeURIComponent(subjectId)}`, { timeout: 15000, validateStatus: () => true });
+      if (resp.data?.success && resp.data?.data?.[0]?.url) {
+        return res.json(resp.data);
+      }
+    } catch {}
   }
   // Fallback: encrypted /api/pw/video (uses subjectSlug as subjectId param)
   if (subjectSlug) {
-    try {
-      const { status, body } = await deltaFetch('GET', `/api/pw/video?batchId=${encodeURIComponent(batchId)}&subjectId=${encodeURIComponent(subjectSlug)}&childId=${encodeURIComponent(childId)}`);
-      if (body?.success && body?.data?.url) {
-        return res.json({ success: true, data: [{ url: body.data.signedUrl ? body.data.url + body.data.signedUrl : body.data.url, type: 'mpd' }] });
-      }
-    } catch (e) { /* fallback failed */ }
+    for (const s of PROXY_SOURCES) {
+      try {
+        const { status, body } = await multiSourceFetch('GET', `/api/pw/video?batchId=${encodeURIComponent(batchId)}&subjectId=${encodeURIComponent(subjectSlug)}&childId=${encodeURIComponent(childId)}`, null, null, null);
+        if (body?.success && body?.data?.url) {
+          return res.json({ success: true, data: [{ url: body.data.signedUrl ? body.data.url + body.data.signedUrl : body.data.url, type: 'mpd' }] });
+        }
+      } catch {}
+    }
   }
   res.status(404).json({ success: false, error: 'Video not available' });
 });
@@ -735,11 +884,10 @@ app.post('/api/admin/logout', adminAuth, (req, res) => {
 app.get('/api/admin/stats', adminAuth, (req, res) => {
   const stats = readJSON('stats.json', { totalVisits: 0, todayVisits: 0, lastDate: '', dailyLog: {} });
   const notification = getNotification();
-  let batches;
-  try { const raw = require('./batches.json'); batches = Array.isArray(raw) ? raw : (raw.data || []); } catch { batches = []; }
+  let batches = cachedBatches || [];
 
   // Batch category breakdown
-  const categorized = categorizeBatches();
+  const categorized = categorizeBatches(batches);
   const categoryStats = {};
   for (const [cat, items] of Object.entries(categorized.catMap)) {
     categoryStats[cat] = items.length;
@@ -841,6 +989,10 @@ app.post('/api/admin/maintenance', adminAuth, (req, res) => {
 
 app.use(express.static(path.join(__dirname)));
 
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+module.exports = app;
+
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+  });
+}
