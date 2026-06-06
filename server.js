@@ -216,12 +216,14 @@ async function multiSourceFetch(method, path, body, cacheType, cacheKey) {
         const resp = await axios(cfg);
         let decrypted;
         try { decrypted = decryptAESGCM(resp.data.data); } catch { decrypted = resp.data; }
-        // Cache successful decrypted response
-        if (decrypted?.success !== false && cacheType && cacheKey) {
-          writeCache(cacheType, cacheKey, decrypted);
+        // Only return if source actually has the data (skip 404/403 responses)
+        if (resp.status >= 200 && resp.status < 300 && decrypted?.success !== false) {
+          if (cacheType && cacheKey) writeCache(cacheType, cacheKey, decrypted);
+          sourceHealth[s.name] = true;
+          return { status: resp.status, body: decrypted, source: s.name };
         }
-        sourceHealth[s.name] = true;
-        return { status: resp.status, body: decrypted, source: s.name };
+        // Non-successful — try next source
+        tried.push(`${s.name} attempt ${attempt}: status ${resp.status} success=${decrypted?.success}`);
       } catch (e) {
         sourceHealth[s.name] = false;
         tried.push(`${s.name} attempt ${attempt}: ${e.message?.substring(0,60)}`);
