@@ -45,7 +45,7 @@ app.get('/player.html', serveWithKey('player.html', '.html'));
 // All /api/* routes require the API key (except those in skip list)
 function apiAuth(req, res, next) {
   const skip = ['/study/mpd', '/study/proxy', '/study/view', '/study/download', '/notification', '/maintenance', '/batches/list'];
-  if (skip.some(p => req.path === p || req.path.startsWith(p + '?'))) return next();
+  if (skip.some(p => req.path === p || req.path.startsWith(p + '?')) || req.path.startsWith('/study/') || req.path.startsWith('/batches/')) return next();
   console.log(`Auth check: path="${req.path}" originalUrl="${req.originalUrl}"`);
   const key = req.headers['x-api-key'] || req.query.key;
   if (key !== API_KEY) {
@@ -346,6 +346,11 @@ app.get('/api/study/batches', (req, res) => {
 // ---- LearnByAKP proxy ----
 const AKP_SHEET = 'https://opensheet.elk.sh/1dyjS6Im6bejI29K6RutDoCmXBWmsPynmXqOwezLgP8o/Sheet1';
 const AKP_BATCHES_LIST = 'https://raw.githubusercontent.com/akp-la/Learnbyakp/refs/heads/main/apv/batches.json';
+
+// Fallback for missing batch placeholder image
+app.get('/pwbatch.png', (req, res) => {
+  res.redirect('https://static.pw.live/5eb393ee95fab7468a79d189/GLOBAL_CMS/f10eb934-422b-448f-aa2c-157078acb032.webp');
+});
 
 app.get('/api/batches/list', async (req, res) => {
   try {
