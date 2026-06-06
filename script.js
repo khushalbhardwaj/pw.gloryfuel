@@ -354,7 +354,7 @@ function renderTopicContent(batchId, subjectSlug, topic, topicName, subjectId) {
             const videoTitle = item.topic || 'Untitled';
             const watchUrl = `player.html?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(childId)}&subjectId=${encodeURIComponent(subjectId || '')}&subjectSlug=${encodeURIComponent(subjectSlug)}&topicSlug=${encodeURIComponent(topic.slug)}&title=${encodeURIComponent(videoTitle)}`;
             card.onclick = () => window.location.href = watchUrl;
-            card.innerHTML = `<div class="card-img"><img src="${optImg(item.videoDetails?.image || item.image || '')}" alt="${videoTitle}" referrerpolicy="no-referrer" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📹</div>'"></div><div class="card-body"><div class="card-name">${videoTitle}</div><div style="display:flex;gap:12px;color:rgba(255,255,255,0.4);font-size:12px"><span>📅 ${(item.date || '').split('T')[0]}</span><span>⏱ ${item.duration || item.videoDetails?.duration || ''}</span></div></div>`;
+            card.innerHTML = `<div class="card-img"><img src="${optImg(item.videoDetails?.image || item.image || '')}" alt="${videoTitle}" referrerpolicy="no-referrer" onload="this.classList.add('loaded')" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📹</div>'"></div><div class="card-body"><div class="card-name">${videoTitle}</div><div style="display:flex;gap:12px;color:rgba(255,255,255,0.4);font-size:12px"><span>📅 ${(item.date || '').split('T')[0]}</span><span>⏱ ${item.duration || item.videoDetails?.duration || ''}</span></div></div>`;
             container.appendChild(card);
           });
         } else {
