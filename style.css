@@ -35,6 +35,7 @@ header {
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
+.brand-img { height:30px; width:auto; max-width:140px; display:block; object-fit:contain }
 
 .header-right { display:flex; align-items:center; gap:10px }
 .batch-count {
