@@ -172,6 +172,7 @@ const EP_CACHE = {
   'batchdetails': { dir: path.join(DATA_DIR, 'details_cache') },
   'topics':       { dir: path.join(DATA_DIR, 'topics_cache') },
   'datacontent':  { dir: path.join(DATA_DIR, 'content_cache') },
+  'today':        { dir: path.join(DATA_DIR, 'today_cache') },
 };
 
 function cacheFilePath(type, key) {
@@ -487,34 +488,60 @@ app.get('/api/study/datacontent', async (req, res) => {
   }
 });
 
+// In-memory cache for today's classes (bypasses read-only filesystem on Vercel)
+const todayCache = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of todayCache) {
+    if (now - entry.ts > 3600000) todayCache.delete(key);
+  }
+}, 60000);
+
 app.post('/api/study/today', async (req, res) => {
   const { batchId } = req.body;
   if (!batchId) return res.status(400).json({ error: 'batchId required' });
   try {
+    const today = new Date().toISOString().slice(0, 10);
+    const cacheKey = `${batchId}_${today}`;
+    const cached = todayCache.get(cacheKey);
+    if (cached) return res.json(cached.data);
+
     const { status, body } = await multiSourceFetch('POST', '/api/pw/batchdetails', { searchParams: { BatchId: batchId } }, 'batchdetails', batchId);
     if (status !== 200 || !body.success) return res.status(400).json({ error: 'batch details failed' });
     const subjects = body.data?.subjects || [];
-    const today = new Date().toISOString().slice(0, 10);
     const items = [];
-    subjects.forEach(sub => {
-      const schedules = sub.schedules || [];
-      schedules.forEach(sch => {
-        if (sch.date && sch.date.slice(0, 10) === today) {
-          items.push({
-            subject: sub.subject || sub.name || '',
-            subjectSlug: sub.slug || '',
-            subjectId: sub._id || '',
-            topic: sch.topic || sch.title || '',
-            scheduleId: sch._id || '',
-            startTime: sch.startTime || '',
-            status: sch.status || '',
-            childId: sch.videoDetails?.findKey || sch.childId || sch._id || '',
-          });
-        }
-      });
-    });
-    res.json({ success: true, data: items });
+    const seen = new Set();
+
+    await Promise.all(subjects.slice(0, 6).map(async sub => {
+      const tResp = await multiSourceFetch('GET', `/api/pw/topics?BatchId=${encodeURIComponent(batchId)}&SubjectId=${encodeURIComponent(sub._id)}`, null, 'topics', `${batchId}_${sub._id}`);
+      if (!tResp.body?.success || !Array.isArray(tResp.body.data)) return;
+      await Promise.all(tResp.body.data.filter(t => t.videos > 0 || t.lectureVideos > 0).slice(0, 3).map(async tv => {
+        const dcResp = await multiSourceFetch('GET', `/api/pw/datacontent?batchId=${encodeURIComponent(batchId)}&subjectSlug=${encodeURIComponent(sub.slug)}&topicSlug=${encodeURIComponent(tv.slug)}&contentType=videos`, null, 'datacontent', `${batchId}_${sub.slug}_${tv.slug}_videos`);
+        if (!dcResp.body?.success || !Array.isArray(dcResp.body.data)) return;
+        dcResp.body.data.forEach(v => {
+          if (v.date && v.date.slice(0, 10) === today && !seen.has(v._id)) {
+            seen.add(v._id);
+            items.push({
+              subject: sub.subject || sub.name || '',
+              subjectSlug: sub.slug || '',
+              subjectId: sub._id || '',
+              topic: v.topic || tv.name || '',
+              scheduleId: v._id || '',
+              startTime: v.startTime || '',
+              status: v.status || '',
+              childId: v.videoDetails?.findKey || v._id || '',
+              date: v.date,
+            });
+          }
+        });
+      }));
+    }));
+
+    const result = { success: true, data: items };
+    todayCache.set(cacheKey, { data: result, ts: Date.now() });
+    res.json(result);
   } catch (err) {
+    console.error('today error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -562,13 +589,21 @@ app.get('/api/study/video-url', async (req, res) => {
 // Helper: fetch MPD and extract video quality options
 async function getVideoQualities(batchId, childId, subjectId, subjectSlug) {
   let mpdUrl;
-  if (subjectId) {
-    const resp = await axios.get(`${STUDY_API}/api/pw/video-url-details?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(childId)}&subjectId=${encodeURIComponent(subjectId)}`, { timeout: 15000, validateStatus: () => true });
-    if (resp.data?.success && resp.data?.data?.[0]?.url) mpdUrl = resp.data.data[0].url;
+  // Try all sources for unencrypted video-url-details
+  for (const s of PROXY_SOURCES) {
+    try {
+      const resp = await axios.get(`${s.base}/api/pw/video-url-details?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(childId)}&subjectId=${encodeURIComponent(subjectId)}`, { timeout: 15000, validateStatus: () => true });
+      if (resp.data?.success && resp.data?.data?.[0]?.url) { mpdUrl = resp.data.data[0].url; break; }
+    } catch {}
   }
+  // Fallback: encrypted /api/pw/video with subjectSlug
   if (!mpdUrl && subjectSlug) {
-    const { body } = await deltaFetch('GET', `/api/pw/video?batchId=${encodeURIComponent(batchId)}&subjectId=${encodeURIComponent(subjectSlug)}&childId=${encodeURIComponent(childId)}`);
-    if (body?.success && body?.data?.url) mpdUrl = body.data.signedUrl ? body.data.url + body.data.signedUrl : body.data.url;
+    for (const s of PROXY_SOURCES) {
+      try {
+        const { body } = await multiSourceFetch('GET', `/api/pw/video?batchId=${encodeURIComponent(batchId)}&subjectId=${encodeURIComponent(subjectSlug)}&childId=${encodeURIComponent(childId)}`, null, null, null);
+        if (body?.success && body?.data?.url) { mpdUrl = body.data.signedUrl ? body.data.url + body.data.signedUrl : body.data.url; break; }
+      } catch {}
+    }
   }
   if (!mpdUrl) return null;
   const mpdResp = await axios.get(mpdUrl, {
