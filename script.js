@@ -97,7 +97,7 @@ function renderBatches(batches, append) {
         <svg class="heart-filled" width="16" height="16" viewBox="0 0 24 24" fill="#fb7185"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
       </button>
       <div class="card-img">
-        <img src="${img}" alt="${name}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📖</div>'">
+        <img src="${img}" alt="${name}" loading="lazy" decoding="async" onload="this.classList.add('loaded')" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📖</div>'">
       </div>
       <div class="card-body">
         <div class="card-name">${name}</div>

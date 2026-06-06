@@ -251,8 +251,10 @@ header {
     height: 100%;
     object-fit: cover;
     display: block;
-    transition: transform 0.5s ease;
+    opacity: 0;
+    transition: opacity .4s ease, transform 0.5s ease;
 }
+.card-img img.loaded { opacity: 1; }
 
 .card:hover .card-img img {
     transform: scale(1.05);

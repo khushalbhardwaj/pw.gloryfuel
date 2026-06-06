@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GloryFuel Player</title>
+<link rel="preconnect" href="https://static.pw.live">
+<link rel="dns-prefetch" href="https://static.pw.live">
 <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.min.js"></script>
 <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
@@ -345,13 +347,13 @@ async function init() {
     // Shaka load -> Plyr auto-detects playback
     await shakaPlayer.load(manifestUrl);
 
-    // Build quality selector from shaka tracks
+    // Inline quality selector (appears next to fullscreen in controls bar)
     const qualityTracks = shakaPlayer.getVariantTracks().filter(t => t.mimeType && t.mimeType.startsWith('video/'));
     if (qualityTracks.length > 1) {
       const heights = [...new Set(qualityTracks.map(t => parseInt(t.height) || 0))].filter(h => h > 0).sort((a, b) => b - a);
       const sel = document.createElement('select');
-      sel.id = 'quality-select';
-      sel.style.cssText = 'background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:4px 8px;font-size:12px;font-family:Outfit,sans-serif;cursor:pointer;outline:none;margin-left:auto';
+      sel.className = 'plyr__controls__item plyr__control';
+      sel.style.cssText = 'background:transparent;color:inherit;border:none;padding:7px;font:inherit;cursor:pointer;outline:none;appearance:none;-webkit-appearance:none;margin:0;font-size:13px';
       heights.forEach(h => {
         const o = document.createElement('option');
         o.value = h; o.textContent = h + 'p';
@@ -366,7 +368,16 @@ async function init() {
         const a = qualityTracks.find(t => t.active);
         if (a && a.height) sel.value = a.height;
       });
-      document.getElementById('header').insertBefore(sel, document.getElementById('dl-btn'));
+      // Insert into Plyr's controls (after the settings button)
+      const insertTarget = () => document.querySelector('.plyr__controls [data-plyr="settings"]');
+      const tryInsert = setInterval(() => {
+        const ref = insertTarget();
+        if (ref) {
+          ref.parentNode.insertBefore(sel, ref.nextSibling);
+          clearInterval(tryInsert);
+        }
+      }, 200);
+      setTimeout(() => clearInterval(tryInsert), 5000);
     }
 
     $('overlay').classList.add('hidden');
