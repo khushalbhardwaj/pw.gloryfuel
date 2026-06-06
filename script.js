@@ -281,7 +281,8 @@ function renderTodayClasses(batchId) {
         card.style.animationDelay = `${i * 0.07}s`;
         const tcTitle = item.topic || "Today's Class";
         card.onclick = () => window.location.href = `player.html?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(item.childId)}&subjectId=${encodeURIComponent(item.subjectId)}&subjectSlug=${encodeURIComponent(item.subjectSlug)}&title=${encodeURIComponent(tcTitle)}`;
-        card.innerHTML = `<div class="card-img"><div class="no-img" style="font-size:40px">📅</div></div><div class="card-body"><div class="card-name">${item.topic || 'Today\'s Class'}</div><div style="color:rgba(255,255,255,0.4);font-size:12px"><span>📘 ${item.subject}</span><span style="margin-left:12px">🕐 ${item.startTime ? item.startTime.slice(0, 5) : ''}</span></div></div>`;
+        const timeStr = item.startTime ? (item.startTime.includes('T') ? item.startTime.slice(11, 16) : item.startTime.slice(0, 5)) : '';
+        card.innerHTML = `<div class="card-img"><div class="no-img" style="font-size:40px">📅</div></div><div class="card-body"><div class="card-name">${item.topic || 'Today\'s Class'}</div><div style="color:rgba(255,255,255,0.4);font-size:12px"><span>📘 ${item.subject}</span><span style="margin-left:12px">🕐 ${timeStr}</span></div></div>`;
         grid.appendChild(card);
       });
     })

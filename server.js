@@ -506,36 +506,58 @@ app.post('/api/study/today', async (req, res) => {
     const cached = todayCache.get(cacheKey);
     if (cached) return res.json(cached.data);
 
-    const { status, body } = await multiSourceFetch('POST', '/api/pw/batchdetails', { searchParams: { BatchId: batchId } }, 'batchdetails', batchId);
-    if (status !== 200 || !body.success) return res.status(400).json({ error: 'batch details failed' });
-    const subjects = body.data?.subjects || [];
+    // Use LearnByAKP directly (Delta Study may have stale/incomplete data)
+    const lakBase = PROXY_SOURCES.filter(s => s.name === 'LearnByAKP')[0]?.base;
+    if (!lakBase) return res.status(502).json({ error: 'LearnByAKP source not configured' });
+
+    const lakFetch = async (method, path, body) => {
+      const cfg = { method, url: `${lakBase}${path}`, timeout: 25000, validateStatus: () => true, headers: { Referer: 'https://learnbyakp.online/', Origin: 'https://learnbyakp.online' } };
+      if (body) cfg.data = body;
+      const resp = await axios(cfg);
+      if (typeof resp.data?.data === 'string') return decryptAESGCM(resp.data.data);
+      return resp.data || {};
+    };
+
+    const bd = await lakFetch('POST', '/api/pw/batchdetails', { searchParams: { BatchId: batchId } });
+    if (!bd.success || !bd.data?.subjects) return res.status(400).json({ error: 'batch details failed from LearnByAKP' });
+    const subjects = bd.data.subjects;
     const items = [];
     const seen = new Set();
 
-    await Promise.all(subjects.slice(0, 6).map(async sub => {
-      const tResp = await multiSourceFetch('GET', `/api/pw/topics?BatchId=${encodeURIComponent(batchId)}&SubjectId=${encodeURIComponent(sub._id)}`, null, 'topics', `${batchId}_${sub._id}`);
-      if (!tResp.body?.success || !Array.isArray(tResp.body.data)) return;
-      await Promise.all(tResp.body.data.filter(t => t.videos > 0 || t.lectureVideos > 0).slice(0, 3).map(async tv => {
-        const dcResp = await multiSourceFetch('GET', `/api/pw/datacontent?batchId=${encodeURIComponent(batchId)}&subjectSlug=${encodeURIComponent(sub.slug)}&topicSlug=${encodeURIComponent(tv.slug)}&contentType=videos`, null, 'datacontent', `${batchId}_${sub.slug}_${tv.slug}_videos`);
-        if (!dcResp.body?.success || !Array.isArray(dcResp.body.data)) return;
-        dcResp.body.data.forEach(v => {
-          if (v.date && v.date.slice(0, 10) === today && !seen.has(v._id)) {
-            seen.add(v._id);
-            items.push({
-              subject: sub.subject || sub.name || '',
-              subjectSlug: sub.slug || '',
-              subjectId: sub._id || '',
-              topic: v.topic || tv.name || '',
-              scheduleId: v._id || '',
-              startTime: v.startTime || '',
-              status: v.status || '',
-              childId: v.videoDetails?.findKey || v._id || '',
-              date: v.date,
+    // Scan up to 6 subjects, all topics with videos
+    const subjectPromises = subjects.slice(0, 6).map(async sub => {
+      try {
+        const topicsResp = await lakFetch('GET', `/api/pw/topics?BatchId=${encodeURIComponent(batchId)}&SubjectId=${encodeURIComponent(sub._id)}`);
+        if (!topicsResp.success || !Array.isArray(topicsResp.data)) return;
+        const withVideos = topicsResp.data.filter(t => t.videos > 0 || t.lectureVideos > 0);
+        if (!withVideos.length) return;
+
+        const topicPromises = withVideos.map(async tv => {
+          try {
+            const dc = await lakFetch('GET', `/api/pw/datacontent?batchId=${encodeURIComponent(batchId)}&subjectSlug=${encodeURIComponent(sub.slug)}&topicSlug=${encodeURIComponent(tv.slug)}&contentType=videos`);
+            if (!dc.success || !Array.isArray(dc.data)) return;
+            dc.data.forEach(v => {
+              if (v.date && v.date.slice(0, 10) === today && !seen.has(v._id)) {
+                seen.add(v._id);
+                items.push({
+                  subject: sub.subject || sub.name || '',
+                  subjectSlug: sub.slug || '',
+                  subjectId: sub._id || '',
+                  topic: v.topic || tv.name || '',
+                  scheduleId: v._id || '',
+                  startTime: v.startTime || '',
+                  status: v.status || '',
+                  childId: v.videoDetails?.findKey || v._id || '',
+                  date: v.date,
+                });
+              }
             });
-          }
+          } catch { /* skip topic on error */ }
         });
-      }));
-    }));
+        await Promise.all(topicPromises);
+      } catch { /* skip subject on error */ }
+    });
+    await Promise.all(subjectPromises);
 
     const result = { success: true, data: items };
     todayCache.set(cacheKey, { data: result, ts: Date.now() });
