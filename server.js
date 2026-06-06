@@ -767,7 +767,7 @@ app.get('/api/study/mpd', async (req, res) => {
       signedParamsCache.set(basePath, { params: signedParams, ts: Date.now() });
     }
     // Inject BaseURL with signed params so Shaka resolves segment URLs with them
-    const baseUrlSuffix = qidx >= 0 ? '?' + url.substring(qidx + 1) : '';
+    const baseUrlSuffix = qidx >= 0 ? '?' + url.substring(qidx + 1).replace(/&/g, '&amp;') : '';
     mpd = mpd.replace(/<MPD[^>]*>/, match => `${match}<BaseURL>${cdnBase}${baseUrlSuffix}</BaseURL>`);
     res.set('Access-Control-Allow-Origin', '*');
     res.set('Content-Type', 'application/dash+xml');
@@ -780,23 +780,25 @@ app.get('/api/study/mpd', async (req, res) => {
 app.get('/api/study/kid', async (req, res) => {
   const { mpdUrl } = req.query;
   if (!mpdUrl) return res.status(400).json({ error: 'mpdUrl required' });
-  try {
-    const resp = await axios.get(`${STUDY_API}/api/pw/kid?mpdUrl=${encodeURIComponent(mpdUrl)}`, { timeout: 15000 });
-    res.json(resp.data);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  for (const s of PROXY_SOURCES) {
+    try {
+      const resp = await axios.get(`${s.base}/api/pw/kid?mpdUrl=${encodeURIComponent(mpdUrl)}`, { timeout: 15000, validateStatus: () => true });
+      if (resp.data?.success) return res.json(resp.data);
+    } catch {}
   }
+  res.status(404).json({ success: false, error: 'KID not found' });
 });
 
 app.get('/api/study/otp', async (req, res) => {
   const { kid } = req.query;
   if (!kid) return res.status(400).json({ error: 'kid required' });
-  try {
-    const resp = await axios.get(`${STUDY_API}/api/pw/otp?kid=${encodeURIComponent(kid)}`, { timeout: 15000 });
-    res.json(resp.data);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+  for (const s of PROXY_SOURCES) {
+    try {
+      const resp = await axios.get(`${s.base}/api/pw/otp?kid=${encodeURIComponent(kid)}`, { timeout: 15000, validateStatus: () => true });
+      if (resp.data?.success) return res.json(resp.data);
+    } catch {}
   }
+  res.status(404).json({ success: false, error: 'OTP not found' });
 });
 
 // Proxy for video segments (adds CORS + proper Origin header)
