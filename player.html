@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
 <title>GloryFuel Player</title>
 <link rel="preconnect" href="https://static.pw.live">
 <link rel="dns-prefetch" href="https://static.pw.live">
@@ -212,11 +213,10 @@ function renderSidebar() {
   list.innerHTML = items.map((item, i) => {
     if (sidebarActiveTab === 'videos') {
       const isActive = item._id === currentChildId || item.videoDetails?.findKey === currentChildId;
-      const rawThumb = item.videoDetails?.image || item.image || '';
-      const thumb = rawThumb.startsWith('http') ? `https://images.weserv.nl/?url=${encodeURIComponent(rawThumb)}&w=160&output=webp&q=80` : rawThumb;
+      const thumb = item.videoDetails?.image || item.image || '';
       const dur = item.videoDetails?.duration || item.duration || '';
       return `<div class="sidebar-item${isActive?' active':''}" onclick="${isActive?'':'playVideo('+i+')'}">
-        <div class="thumb">${thumb ? `<img src="${thumb}" alt="" loading="lazy" onerror="this.outerHTML='📹'">` : '📹'}</div>
+        <div class="thumb">${thumb ? `<img src="${thumb}" alt="" referrerpolicy="no-referrer" onerror="this.style.display='none';this.parentElement.textContent='📹'">` : '📹'}</div>
         <div class="info"><div class="name">${item.topic || 'Untitled'}</div><div class="meta">${dur ? '⏱ '+dur : ''}</div></div>
       </div>`;
     } else {
@@ -343,6 +343,15 @@ async function init() {
 
     // Shaka load -> Plyr auto-detects playback
     await shakaPlayer.load(manifestUrl);
+
+    // Debug: log sidebar video data structure
+    (async () => {
+      try {
+        const dbg = await apiFetch(`${API}/study/datacontent?batchId=${encodeURIComponent(currentBatchId)}&subjectSlug=${encodeURIComponent(currentSubjectSlug)}&topicSlug=${encodeURIComponent(currentTopicSlug)}&contentType=videos`);
+        const d = await dbg.json();
+        if (d.success && d.data?.length) console.log('first video item keys:', Object.keys(d.data[0]), 'image:', d.data[0].image, 'videoDetails:', d.data[0].videoDetails);
+      } catch {}
+    })();
 
     // Populate Plyr's built-in quality settings menu from shaka tracks
     const qualityTracks = shakaPlayer.getVariantTracks().filter(t => t.mimeType && t.mimeType.startsWith('video/'));
