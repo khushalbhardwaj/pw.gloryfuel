@@ -332,7 +332,7 @@ async function init() {
     // Initialise Plyr on the same video element
     const plyr = new Plyr(video, {
       controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'fullscreen'],
-      settings: ['quality', 'speed'],
+      settings: ['speed'],
       speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] },
       keyboard: { focused: true, global: true },
       tooltips: { controls: true, seek: true },
@@ -344,6 +344,31 @@ async function init() {
 
     // Shaka load -> Plyr auto-detects playback
     await shakaPlayer.load(manifestUrl);
+
+    // Build quality selector from shaka tracks
+    const qualityTracks = shakaPlayer.getVariantTracks().filter(t => t.mimeType && t.mimeType.startsWith('video/'));
+    if (qualityTracks.length > 1) {
+      const heights = [...new Set(qualityTracks.map(t => parseInt(t.height) || 0))].filter(h => h > 0).sort((a, b) => b - a);
+      const sel = document.createElement('select');
+      sel.id = 'quality-select';
+      sel.style.cssText = 'background:rgba(255,255,255,0.08);color:#fff;border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:4px 8px;font-size:12px;font-family:Outfit,sans-serif;cursor:pointer;outline:none;margin-left:auto';
+      heights.forEach(h => {
+        const o = document.createElement('option');
+        o.value = h; o.textContent = h + 'p';
+        sel.appendChild(o);
+      });
+      const trackByH = {}; qualityTracks.forEach(t => { trackByH[t.height] = t; });
+      sel.addEventListener('change', () => {
+        const t = trackByH[parseInt(sel.value)];
+        if (t) shakaPlayer.selectVariantTrack(t, true);
+      });
+      shakaPlayer.addEventListener('trackchanged', () => {
+        const a = qualityTracks.find(t => t.active);
+        if (a && a.height) sel.value = a.height;
+      });
+      document.getElementById('header').insertBefore(sel, document.getElementById('dl-btn'));
+    }
+
     $('overlay').classList.add('hidden');
     document.title = title;
   } catch (e) {
