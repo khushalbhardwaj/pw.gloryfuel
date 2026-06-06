@@ -570,17 +570,19 @@ async function getVideoQualities(batchId, childId, subjectId, subjectSlug) {
   }
   if (!mpdUrl) return null;
   const mpdResp = await axios.get(mpdUrl, {
-    headers: { 'Origin': 'https://deltastudy.site', 'Referer': 'https://deltastudy.site/study-v2/batches', 'User-Agent': 'Mozilla/5.0' },
-    responseType: 'text', timeout: 15000, validateStatus: () => true,
-  });
-  let mpd = mpdResp.data;
-  const qidx = mpdUrl.indexOf('?');
+      headers: { 'Origin': 'https://learnbyakp.online', 'Referer': 'https://learnbyakp.online/', 'User-Agent': 'Mozilla/5.0' },
+      responseType: 'text', timeout: 15000, validateStatus: () => true,
+    });
+    let mpd = mpdResp.data;
+    const qidx = mpdUrl.indexOf('?');
   const baseUrl = qidx >= 0 ? mpdUrl.substring(0, qidx) : mpdUrl;
   const cdnBase = baseUrl.substring(0, baseUrl.lastIndexOf('/')) + '/';
   if (qidx >= 0) {
     const signedParams = mpdUrl.substring(qidx + 1);
-    const basePath = new URL(cdnBase).pathname;
-    signedParamsCache.set(basePath, { params: signedParams, ts: Date.now() });
+      const cdnPath = new URL(cdnBase).pathname;
+      const m2 = cdnPath.match(/^(\/[^/]+\/)/);
+      const basePath = m2 ? m2[1] : cdnPath;
+      signedParamsCache.set(basePath, { params: signedParams, ts: Date.now() });
   }
   return { mpdUrl, mpd, cdnBase };
 }
@@ -742,8 +744,8 @@ app.get('/api/study/mpd', async (req, res) => {
   try {
     const resp = await axios.get(url, {
       headers: {
-        'Origin': 'https://deltastudy.site',
-        'Referer': 'https://deltastudy.site/study-v2/batches',
+        'Origin': 'https://learnbyakp.online',
+        'Referer': 'https://learnbyakp.online/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
       },
       responseType: 'text',
@@ -758,7 +760,10 @@ app.get('/api/study/mpd', async (req, res) => {
     // Extract signed query params and cache them for segment proxy requests
     if (qidx >= 0) {
       const signedParams = url.substring(qidx + 1);
-      const basePath = new URL(cdnBase).pathname;
+      // Use top-level path prefix (e.g. /<uuid>/) so proxy can match any segment under it
+      const cdnPath = new URL(cdnBase).pathname;
+      const m = cdnPath.match(/^(\/[^/]+\/)/);
+      const basePath = m ? m[1] : cdnPath;
       signedParamsCache.set(basePath, { params: signedParams, ts: Date.now() });
     }
     // Inject BaseURL as first child of <MPD> so Shaka resolves relative paths
@@ -814,8 +819,8 @@ app.get('/api/study/proxy', async (req, res) => {
   try {
     const resp = await axios.get(fetchUrl, {
       headers: {
-        'Origin': 'https://deltastudy.site',
-        'Referer': 'https://deltastudy.site/study-v2/batches',
+        'Origin': 'https://learnbyakp.online',
+        'Referer': 'https://learnbyakp.online/',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
       },
       responseType: 'stream',
@@ -855,7 +860,7 @@ app.get('/api/study/view', async (req, res) => {
   try {
     const deltaRes = await axios.get(`${STUDY_API}/api/pw/view`, {
       params: { url, filename: filename || '' },
-      headers: { 'Origin': 'https://deltastudy.site', 'Referer': 'https://deltastudy.site/study-v2/batches' },
+      headers: { 'Origin': 'https://learnbyakp.online', 'Referer': 'https://learnbyakp.online/' },
       responseType: 'stream',
       timeout: 30000,
       validateStatus: () => true
