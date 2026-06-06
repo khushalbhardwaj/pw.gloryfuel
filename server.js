@@ -570,7 +570,7 @@ async function getVideoQualities(batchId, childId, subjectId, subjectSlug) {
   }
   if (!mpdUrl) return null;
   const mpdResp = await axios.get(mpdUrl, {
-      headers: { 'Origin': 'https://learnbyakp.online', 'Referer': 'https://learnbyakp.online/', 'User-Agent': 'Mozilla/5.0' },
+      headers: { 'Origin': 'https://pw.live', 'Referer': 'https://pw.live/study-v2/batches', 'User-Agent': 'Mozilla/5.0' },
       responseType: 'text', timeout: 15000, validateStatus: () => true,
     });
     let mpd = mpdResp.data;
@@ -744,8 +744,8 @@ app.get('/api/study/mpd', async (req, res) => {
   try {
     const resp = await axios.get(url, {
       headers: {
-        'Origin': 'https://learnbyakp.online',
-        'Referer': 'https://learnbyakp.online/',
+        'Origin': 'https://pw.live',
+        'Referer': 'https://pw.live/study-v2/batches',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
       },
       responseType: 'text',
@@ -766,8 +766,9 @@ app.get('/api/study/mpd', async (req, res) => {
       const basePath = m ? m[1] : cdnPath;
       signedParamsCache.set(basePath, { params: signedParams, ts: Date.now() });
     }
-    // Inject BaseURL as first child of <MPD> so Shaka resolves relative paths
-    mpd = mpd.replace(/<MPD[^>]*>/, match => `${match}<BaseURL>${cdnBase}</BaseURL>`);
+    // Inject BaseURL with signed params so Shaka resolves segment URLs with them
+    const baseUrlSuffix = qidx >= 0 ? '?' + url.substring(qidx + 1) : '';
+    mpd = mpd.replace(/<MPD[^>]*>/, match => `${match}<BaseURL>${cdnBase}${baseUrlSuffix}</BaseURL>`);
     res.set('Access-Control-Allow-Origin', '*');
     res.set('Content-Type', 'application/dash+xml');
     res.status(resp.status).send(mpd);
@@ -802,25 +803,26 @@ app.get('/api/study/otp', async (req, res) => {
 app.get('/api/study/proxy', async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).json({ error: 'url required' });
-  // Attach cached signed params so CDN authorises the segment request
   let fetchUrl = url;
   try {
     const parsed = new URL(url);
     if (parsed.hostname === 'sec-prod-mediacdn.pw.live') {
-      // Extract the top-level path prefix (e.g. /<uuid>/) to match cache key
-      const m = parsed.pathname.match(/^(\/[^/]+\/)/);
-      const basePath = m ? m[1] : parsed.pathname;
-      const entry = signedParamsCache.get(basePath);
-      if (entry) {
-        fetchUrl = url + (url.includes('?') ? '&' : '?') + entry.params;
+      // Only add cached signed params if URL doesn't already carry them
+      if (!parsed.search) {
+        const m = parsed.pathname.match(/^(\/[^/]+\/)/);
+        const basePath = m ? m[1] : parsed.pathname;
+        const entry = signedParamsCache.get(basePath);
+        if (entry) {
+          fetchUrl = url + '?' + entry.params;
+        }
       }
     }
   } catch {}
   try {
     const resp = await axios.get(fetchUrl, {
       headers: {
-        'Origin': 'https://learnbyakp.online',
-        'Referer': 'https://learnbyakp.online/',
+        'Origin': 'https://pw.live',
+        'Referer': 'https://pw.live/study-v2/batches',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36',
       },
       responseType: 'stream',
@@ -860,7 +862,7 @@ app.get('/api/study/view', async (req, res) => {
   try {
     const deltaRes = await axios.get(`${STUDY_API}/api/pw/view`, {
       params: { url, filename: filename || '' },
-      headers: { 'Origin': 'https://learnbyakp.online', 'Referer': 'https://learnbyakp.online/' },
+      headers: { 'Origin': 'https://pw.live', 'Referer': 'https://pw.live/study-v2/batches' },
       responseType: 'stream',
       timeout: 30000,
       validateStatus: () => true
