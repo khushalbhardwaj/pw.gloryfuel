@@ -6,6 +6,8 @@
 <title>GloryFuel Player</title>
 <link rel="preconnect" href="https://static.pw.live">
 <link rel="dns-prefetch" href="https://static.pw.live">
+<link rel="preconnect" href="https://sec-prod-mediacdn.pw.live">
+<link rel="dns-prefetch" href="https://sec-prod-mediacdn.pw.live">
 <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.11/shaka-player.compiled.min.js"></script>
 <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
@@ -314,14 +316,7 @@ async function init() {
     const video = $('video');
     const shakaPlayer = new shaka.Player(video);
 
-    const proxyUrl = `${API}/study/proxy`;
-    shakaPlayer.getNetworkingEngine().registerRequestFilter((type, request) => {
-      let u = request.uris[0];
-      if (u.startsWith('https://sec-prod-mediacdn.pw.live')) {
-        request.uris = [proxyUrl + '?url=' + encodeURIComponent(u)];
-      }
-    });
-
+    // Segments fetched directly from CDN (signed params are in MPD segment URLs)
     shakaPlayer.configure({
       drm: { clearKeys: { [kid]: key } },
       streaming: { rebufferingGoal: 15 }
@@ -334,7 +329,8 @@ async function init() {
     // Initialise Plyr on the same video element
     const plyr = new Plyr(video, {
       controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'fullscreen'],
-      settings: ['speed'],
+      settings: ['quality', 'speed'],
+      quality: { default: 720, options: [720], forced: true },
       speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] },
       keyboard: { focused: true, global: true },
       tooltips: { controls: true, seek: true },
@@ -347,37 +343,47 @@ async function init() {
     // Shaka load -> Plyr auto-detects playback
     await shakaPlayer.load(manifestUrl);
 
-    // Inline quality selector (appears next to fullscreen in controls bar)
+    // Populate Plyr's built-in quality settings menu from shaka tracks
     const qualityTracks = shakaPlayer.getVariantTracks().filter(t => t.mimeType && t.mimeType.startsWith('video/'));
     if (qualityTracks.length > 1) {
       const heights = [...new Set(qualityTracks.map(t => parseInt(t.height) || 0))].filter(h => h > 0).sort((a, b) => b - a);
-      const sel = document.createElement('select');
-      sel.className = 'plyr__controls__item plyr__control';
-      sel.style.cssText = 'background:transparent;color:inherit;border:none;padding:7px;font:inherit;cursor:pointer;outline:none;appearance:none;-webkit-appearance:none;margin:0;font-size:13px';
-      heights.forEach(h => {
-        const o = document.createElement('option');
-        o.value = h; o.textContent = h + 'p';
-        sel.appendChild(o);
-      });
       const trackByH = {}; qualityTracks.forEach(t => { trackByH[t.height] = t; });
-      sel.addEventListener('change', () => {
-        const t = trackByH[parseInt(sel.value)];
-        if (t) shakaPlayer.selectVariantTrack(t, true);
-      });
-      shakaPlayer.addEventListener('trackchanged', () => {
-        const a = qualityTracks.find(t => t.active);
-        if (a && a.height) sel.value = a.height;
-      });
-      // Insert into Plyr's controls (after the settings button)
-      const insertTarget = () => document.querySelector('.plyr__controls [data-plyr="settings"]');
-      const tryInsert = setInterval(() => {
-        const ref = insertTarget();
-        if (ref) {
-          ref.parentNode.insertBefore(sel, ref.nextSibling);
-          clearInterval(tryInsert);
-        }
-      }, 200);
-      setTimeout(() => clearInterval(tryInsert), 5000);
+      // Poll for the quality settings panel (built lazily on first settings open)
+      const qInterval = setInterval(() => {
+        const backBtn = document.querySelector('[data-plyr="quality"]');
+        if (!backBtn) return;
+        const menuInner = backBtn.closest('.plyr__menu__inner');
+        if (!menuInner) return;
+        clearInterval(qInterval);
+        // Remove dummy options
+        menuInner.querySelectorAll('[role="menuitemradio"]').forEach(el => el.remove());
+        // Add real quality options
+        const activeTrack = qualityTracks.find(t => t.active);
+        heights.forEach(h => {
+          const btn = document.createElement('button');
+          btn.className = 'plyr__control';
+          btn.role = 'menuitemradio';
+          btn.setAttribute('data-value', h);
+          if (activeTrack && activeTrack.height === h) btn.setAttribute('aria-checked', 'true');
+          btn.innerHTML = `<span>${h}p</span>`;
+          btn.addEventListener('click', () => {
+            const t = trackByH[h];
+            if (t) shakaPlayer.selectVariantTrack(t, true);
+            menuInner.querySelectorAll('[role="menuitemradio"]').forEach(b => b.removeAttribute('aria-checked'));
+            btn.setAttribute('aria-checked', 'true');
+          });
+          menuInner.appendChild(btn);
+        });
+        // Sync when ABR switches quality
+        shakaPlayer.addEventListener('trackchanged', () => {
+          const a = qualityTracks.find(t => t.active);
+          if (!a) return;
+          menuInner.querySelectorAll('[role="menuitemradio"]').forEach(b => {
+            b.toggleAttribute('aria-checked', parseInt(b.getAttribute('data-value')) === a.height);
+          });
+        });
+      }, 300);
+      setTimeout(() => clearInterval(qInterval), 20000);
     }
 
     $('overlay').classList.add('hidden');
