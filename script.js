@@ -4,11 +4,10 @@ async function apiFetch(url, opts = {}) {
 }
 
 // Resize + convert to WebP via free image proxy (thumbs load 5x faster)
-function optImg(url, w = 400) {
-  if (!url || url.startsWith('/') || url.startsWith('data:')) return url;
-  // Skip if already a weserv URL
-  if (url.includes('images.weserv.nl')) return url;
-  return `https://images.weserv.nl/?url=${encodeURIComponent(url)}&w=${w}&output=webp&q=80`;
+function optImg(url) {
+  // Just return URL as-is — CDNs allow all origins, no proxy needed
+  if (!url || url.startsWith('/') || url.startsWith('data:')) return '';
+  return url;
 }
 function showLoad() { document.getElementById('loading-overlay').style.display = 'flex'; }
 function hideLoad() { document.getElementById('loading-overlay').style.display = 'none'; }
