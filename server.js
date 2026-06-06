@@ -177,7 +177,7 @@ const EP_CACHE = {
 function cacheFilePath(type, key) {
   const cfg = EP_CACHE[type];
   if (!cfg) return null;
-  if (!fs.existsSync(cfg.dir)) fs.mkdirSync(cfg.dir, { recursive: true });
+  if (!fs.existsSync(cfg.dir)) try { fs.mkdirSync(cfg.dir, { recursive: true }); } catch {}
   return path.join(cfg.dir, `${key}.json`);
 }
 function readCache(type, key) {
@@ -480,7 +480,8 @@ app.get('/api/study/datacontent', async (req, res) => {
     const result = await multiSourceFetch('GET', `/api/pw/datacontent?batchId=${encodeURIComponent(batchId)}&subjectSlug=${encodeURIComponent(subjectSlug)}&topicSlug=${encodeURIComponent(topicSlug)}&contentType=${encodeURIComponent(contentType)}`, null, 'datacontent', `${batchId}_${subjectSlug}_${topicSlug}_${contentType}`);
     res.status(result.status).json(result.body);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('datacontent error:', err?.message, err?.stack);
+    res.status(500).json({ error: err?.message || 'Unknown error', detail: err?.stack?.substring(0, 200) });
   }
 });
 
