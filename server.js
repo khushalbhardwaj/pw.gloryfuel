@@ -766,9 +766,17 @@ app.get('/api/study/mpd', async (req, res) => {
       const basePath = m ? m[1] : cdnPath;
       signedParamsCache.set(basePath, { params: signedParams, ts: Date.now() });
     }
-    // Inject BaseURL with signed params so Shaka resolves segment URLs with them
-    const baseUrlSuffix = qidx >= 0 ? '?' + url.substring(qidx + 1).replace(/&/g, '&amp;') : '';
-    mpd = mpd.replace(/<MPD[^>]*>/, match => `${match}<BaseURL>${cdnBase}${baseUrlSuffix}</BaseURL>`);
+    // Inject BaseURL and add signed params directly to segment URLs (URL resolution drops base query string)
+    if (qidx >= 0) {
+      const signedParams = url.substring(qidx + 1);
+      const escapedParams = signedParams.replace(/&/g, '&amp;');
+      mpd = mpd.replace(/<MPD[^>]*>/, match => `${match}<BaseURL>${cdnBase}</BaseURL>`);
+      mpd = mpd.replace(/(initialization="[^"]+)(")/g, `$1?${escapedParams}$2`);
+      mpd = mpd.replace(/(media="[^"]+)(")/g, `$1?${escapedParams}$2`);
+      mpd = mpd.replace(/(<SegmentURL[^>]*media="[^"]+)(")/g, `$1?${escapedParams}$2`);
+    } else {
+      mpd = mpd.replace(/<MPD[^>]*>/, match => `${match}<BaseURL>${cdnBase}</BaseURL>`);
+    }
     res.set('Access-Control-Allow-Origin', '*');
     res.set('Content-Type', 'application/dash+xml');
     res.status(resp.status).send(mpd);
