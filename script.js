@@ -2,6 +2,14 @@ async function apiFetch(url, opts = {}) {
   opts.headers = { ...opts.headers, 'x-api-key': API_KEY };
   return fetch(url, opts);
 }
+
+// Resize + convert to WebP via free image proxy (thumbs load 5x faster)
+function optImg(url, w = 400) {
+  if (!url || url.startsWith('/') || url.startsWith('data:')) return url;
+  // Skip if already a weserv URL
+  if (url.includes('images.weserv.nl')) return url;
+  return `https://images.weserv.nl/?url=${encodeURIComponent(url)}&w=${w}&output=webp&q=80`;
+}
 function showLoad() { document.getElementById('loading-overlay').style.display = 'flex'; }
 function hideLoad() { document.getElementById('loading-overlay').style.display = 'none'; }
 
@@ -72,7 +80,7 @@ function renderBatches(batches, append) {
     const hasContent = !!batchId;
     const bid = batchId || b._id || b.id || b.slug || `batch-${i}`;
     const name = b.name || 'Unknown Batch';
-    const img = b.image || b.thumbnail || '';
+    const img = optImg(b.image || b.thumbnail || '');
     const isFav = favs.includes(bid);
 
     const card = document.createElement('div');
@@ -346,7 +354,7 @@ function renderTopicContent(batchId, subjectSlug, topic, topicName, subjectId) {
             const videoTitle = item.topic || 'Untitled';
             const watchUrl = `player.html?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(childId)}&subjectId=${encodeURIComponent(subjectId || '')}&subjectSlug=${encodeURIComponent(subjectSlug)}&topicSlug=${encodeURIComponent(topic.slug)}&title=${encodeURIComponent(videoTitle)}`;
             card.onclick = () => window.location.href = watchUrl;
-            card.innerHTML = `<div class="card-img"><img src="${item.videoDetails?.image || item.image || ''}" alt="${videoTitle}" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📹</div>'"></div><div class="card-body"><div class="card-name">${videoTitle}</div><div style="display:flex;gap:12px;color:rgba(255,255,255,0.4);font-size:12px"><span>📅 ${(item.date || '').split('T')[0]}</span><span>⏱ ${item.duration || item.videoDetails?.duration || ''}</span></div></div>`;
+            card.innerHTML = `<div class="card-img"><img src="${optImg(item.videoDetails?.image || item.image || '')}" alt="${videoTitle}" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📹</div>'"></div><div class="card-body"><div class="card-name">${videoTitle}</div><div style="display:flex;gap:12px;color:rgba(255,255,255,0.4);font-size:12px"><span>📅 ${(item.date || '').split('T')[0]}</span><span>⏱ ${item.duration || item.videoDetails?.duration || ''}</span></div></div>`;
             container.appendChild(card);
           });
         } else {
@@ -420,7 +428,7 @@ function categorizeBatches(batches) {
       if (cat !== 'Other') break;
     }
     if (!catMap[cat]) catMap[cat] = [];
-    catMap[cat].push({ _id: b._id, name: b.name, image: b.image || b.previewImage || '', slug: b.slug, batchId: b.batchId || b._id || '' });
+    catMap[cat].push({ _id: b._id, name: b.name, image: optImg(b.image || b.previewImage || ''), slug: b.slug, batchId: b.batchId || b._id || '' });
   });
   return { sections: CATEGORY_SECTIONS, catMap };
 }
