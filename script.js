@@ -12,6 +12,35 @@ function optImg(url) {
 function showLoad() { document.getElementById('loading-overlay').style.display = 'flex'; }
 function hideLoad() { document.getElementById('loading-overlay').style.display = 'none'; }
 
+// ---- PROGRESS TRACKING ----
+const PROGRESS_KEY = 'gf_pw_progress';
+const RESUME_KEY = 'gf_pw_resume';
+function getProgress() { try { return JSON.parse(localStorage.getItem(PROGRESS_KEY) || '{}'); } catch { return {}; } }
+function saveProgress(p) { localStorage.setItem(PROGRESS_KEY, JSON.stringify(p)); }
+function getResume() { try { return JSON.parse(localStorage.getItem(RESUME_KEY) || '{}'); } catch { return {}; } }
+function saveResume(batchId, subSlug, childId, title, subjectId) {
+  const r = getResume();
+  r[batchId] = { subSlug, childId, title, subjectId, ts: Date.now() };
+  localStorage.setItem(RESUME_KEY, JSON.stringify(r));
+}
+function getBatchResume(batchId) { return getResume()[batchId] || null; }
+function markWatched(batchId, subSlug, childId, title, subjectId) {
+  const p = getProgress();
+  if (!p[batchId]) p[batchId] = {};
+  if (!p[batchId][subSlug]) p[batchId][subSlug] = {};
+  p[batchId][subSlug][childId] = { w: 1, ts: Date.now(), t: title || '' };
+  saveProgress(p);
+  saveResume(batchId, subSlug, childId, title, subjectId);
+}
+function isWatched(batchId, subSlug, childId) { return !!(getProgress()[batchId]?.[subSlug]?.[childId]?.w); }
+function countWatched(batchId, subSlug) {
+  const p = getProgress();
+  return Object.keys(p[batchId]?.[subSlug] || {}).length;
+}
+function clearBatchProgress(batchId) {
+  const p = getProgress(); delete p[batchId]; saveProgress(p);
+}
+
 // ---- Watch/Download modal ----
 let wdWatchUrl = '', wdDlUrlBase = '', wdDlTitle = '';
 function openWDDialog(watchUrl, dlUrlBase, title) {
@@ -108,6 +137,7 @@ function renderBatches(batches, append) {
       </div>
       <div class="card-body">
         <div class="card-name">${name}</div>
+        <div class="batch-progress" data-bid="${bid}"></div>
         ${btnHtml}
       </div>`;
     grid.appendChild(card);
@@ -117,6 +147,8 @@ function renderBatches(batches, append) {
   const oldBtn = document.getElementById('load-more');
   if (oldBtn) oldBtn.remove();
 
+  updateBatchProgressBars();
+
   if (slice.length < batches.length) {
     const btn = document.createElement('button');
     btn.id = 'load-more';
@@ -125,6 +157,20 @@ function renderBatches(batches, append) {
     btn.onclick = () => { page++; renderBatches(batches, true); };
     grid.appendChild(btn);
   }
+}
+
+function updateBatchProgressBars() {
+  const p = getProgress();
+  document.querySelectorAll('.batch-progress').forEach(el => {
+    const bid = el.dataset.bid;
+    const subData = p[bid];
+    if (!subData) return;
+    const totalVideos = Object.values(subData).reduce((s, v) => s + Object.keys(v).length, 0);
+    const watchedVideos = Object.values(subData).reduce((s, v) => s + Object.values(v).filter(x => x.w).length, 0);
+    if (totalVideos === 0) return;
+    const pct = Math.round((watchedVideos / totalVideos) * 100);
+    el.innerHTML = `<div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div><div class="progress-label">${watchedVideos} watched</div>`;
+  });
 }
 
 let currentCategory = 'All';
@@ -238,6 +284,34 @@ function renderSubjects(batchId) {
       const subjects = data.data?.subjects || [];
       if (subjects.length === 0) { grid.innerHTML = '<div class="empty"><div>📚</div><div>No subjects found</div></div>'; return; }
       grid.innerHTML = '';
+      // Progress bar on top + hidden detailed breakdown
+      const totalLec = subjects.reduce((s, sub) => s + (sub.lectureCount || sub.videoCount || 0), 0);
+      const totalWatched = subjects.reduce((s, sub) => s + countWatched(batchId, sub.slug || ''), 0);
+      const overallPct = totalLec > 0 ? Math.round((totalWatched / totalLec) * 100) : 0;
+      const progressBanner = document.createElement('div');
+      progressBanner.style.cssText = 'grid-column:1/-1;background:rgba(167,139,250,0.08);border-radius:16px;padding:16px 20px;margin-bottom:4px;cursor:pointer';
+      progressBanner.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><span style="font-size:15px;font-weight:600">📊 Batch Progress</span><span style="font-size:12px;color:rgba(255,255,255,0.4)">${totalWatched}/${totalLec} · ${overallPct}%</span></div><div class="progress-bar" style="height:5px"><div class="progress-fill" style="width:${overallPct}%"></div></div><div id="progress-detail" style="display:none;margin-top:12px;border-top:1px solid rgba(255,255,255,0.06);padding-top:8px"></div><div style="text-align:center;font-size:11px;color:rgba(255,255,255,0.3);margin-top:6px">▼ tap to expand</div>`;
+      progressBanner.onclick = () => {
+        const detail = document.getElementById('progress-detail');
+        if (detail.style.display !== 'none') { detail.style.display = 'none'; progressBanner.querySelector(':scope > div:last-child').textContent = '▼ tap to expand'; return; }
+        detail.style.display = 'block';
+        progressBanner.querySelector(':scope > div:last-child').textContent = '▲ tap to collapse';
+        let html = '';
+        const resume = getBatchResume(batchId);
+        if (resume) {
+          const resumeUrl = `player.html?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(resume.childId)}&subjectSlug=${encodeURIComponent(resume.subSlug)}${resume.subjectId ? '&subjectId='+encodeURIComponent(resume.subjectId) : ''}&title=${encodeURIComponent(resume.title)}`;
+          html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:10px;background:rgba(167,139,250,0.12);border-radius:10px;cursor:pointer" onclick="window.location.href='${resumeUrl}'"><div style="font-size:20px">▶️</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${resume.title}</div><div style="font-size:11px;color:rgba(255,255,255,0.3)">${new Date(resume.ts).toLocaleDateString()}</div></div><div style="font-size:12px;color:#a78bfa;font-weight:600">Resume</div></div>`;
+        }
+        html += subjects.filter(s => (s.lectureCount || s.videoCount || 0) > 0).map(s => {
+          const t = s.lectureCount || s.videoCount || 0;
+          const w = countWatched(batchId, s.slug || '');
+          const p = Math.round((w / t) * 100);
+          const icon = p === 100 ? '✅' : p > 0 ? '⏳' : '📋';
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:13px"><span>${icon} ${s.subject || s.name}</span><span style="color:${p === 100 ? '#4ade80' : 'rgba(255,255,255,0.5)'}">${w}/${t}</span></div>`;
+        }).join('');
+        detail.innerHTML = html;
+      };
+      grid.appendChild(progressBanner);
       const todayCard = document.createElement('div');
       todayCard.className = 'card';
       todayCard.style.animationDelay = '0s';
@@ -255,7 +329,9 @@ function renderSubjects(batchId) {
         const sLec = s.lectureCount || s.videoCount || 0;
         const sNote = s.notesCount || s.noteCount || 0;
         const sDpp = s.dppCount || 0;
-        card.innerHTML = `<div class="card-body" style="text-align:center;padding:40px 20px"><img src="${icon}" alt="${sName}" style="width:48px;height:48px;margin-bottom:12px" onerror="this.style.display='none'"><div class="card-name">${sName}</div><div style="display:flex;gap:12px;justify-content:center;color:rgba(255,255,255,0.4);font-size:12px;margin-top:6px"><span>📹 ${sLec}</span><span>📄 ${sNote}</span><span>📝 ${sDpp}</span></div></div>`;
+        const wCount = sLec > 0 ? countWatched(batchId, slug) : 0;
+        const pct = sLec > 0 ? Math.round((wCount / sLec) * 100) : 0;
+        card.innerHTML = `<div class="card-body" style="text-align:center;padding:40px 20px"><img src="${icon}" alt="${sName}" style="width:48px;height:48px;margin-bottom:12px" onerror="this.style.display='none'"><div class="card-name">${sName}</div><div style="display:flex;gap:12px;justify-content:center;color:rgba(255,255,255,0.4);font-size:12px;margin-top:6px"><span>📹 ${sLec}</span><span>📄 ${sNote}</span><span>📝 ${sDpp}</span></div>${pct > 0 ? `<div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div><div class="progress-label">${wCount}/${sLec} watched</div>` : ''}</div>`;
         grid.appendChild(card);
       });
     })
@@ -354,7 +430,8 @@ function renderTopicContent(batchId, subjectSlug, topic, topicName, subjectId) {
             const videoTitle = item.topic || 'Untitled';
             const watchUrl = `player.html?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(childId)}&subjectId=${encodeURIComponent(subjectId || '')}&subjectSlug=${encodeURIComponent(subjectSlug)}&topicSlug=${encodeURIComponent(topic.slug)}&title=${encodeURIComponent(videoTitle)}`;
             card.onclick = () => window.location.href = watchUrl;
-            card.innerHTML = `<div class="card-img"><img src="${optImg(item.videoDetails?.image || item.image || '')}" alt="${videoTitle}" referrerpolicy="no-referrer" onload="this.classList.add('loaded')" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📹</div>'"></div><div class="card-body"><div class="card-name">${videoTitle}</div><div style="display:flex;gap:12px;color:rgba(255,255,255,0.4);font-size:12px"><span>📅 ${(item.date || '').split('T')[0]}</span><span>⏱ ${item.duration || item.videoDetails?.duration || ''}</span></div></div>`;
+            const w = isWatched(batchId, subjectSlug, childId);
+            card.innerHTML = `<div class="card-img"><img src="${optImg(item.videoDetails?.image || item.image || '')}" alt="${videoTitle}" referrerpolicy="no-referrer" onload="this.classList.add('loaded')" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📹</div>'">${w ? '<div class="watched-badge">✓</div>' : ''}</div><div class="card-body"><div class="card-name">${videoTitle}</div><div style="display:flex;gap:12px;color:rgba(255,255,255,0.4);font-size:12px"><span>📅 ${(item.date || '').split('T')[0]}</span><span>⏱ ${item.duration || item.videoDetails?.duration || ''}</span></div></div>`;
             container.appendChild(card);
           });
         } else {
@@ -435,6 +512,7 @@ function categorizeBatches(batches) {
 
 // ---- INIT ----
 async function initApp() {
+  showLoad();
   const catFilter = document.getElementById('cat-filter');
   try {
     // Load batches from LearnByAKP API
@@ -459,7 +537,9 @@ async function initApp() {
     sortByRecent(allBatchesFlat);
     filterByCategory('All');
     updateFavSection();
+    hideLoad();
   } catch {
+    hideLoad();
     document.getElementById('all-grid').innerHTML = '<div class="empty"><div>❌</div><div>Failed to load</div></div>';
   }
 }

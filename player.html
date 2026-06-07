@@ -396,6 +396,35 @@ async function init() {
       setTimeout(() => clearInterval(qInterval), 20000);
     }
 
+    // Track watch progress — mark as watched at 75%
+    let watchMarked = false;
+    const progressKey = 'gf_pw_progress';
+    const markWatched = () => {
+      if (watchMarked) return;
+      watchMarked = true;
+      try {
+        const existing = JSON.parse(localStorage.getItem(progressKey) || '{}');
+        const bid = currentBatchId, subSlug = currentSubjectSlug, cid = currentChildId;
+        if (!bid || !subSlug || !cid) return;
+        if (!existing[bid]) existing[bid] = {};
+        if (!existing[bid][subSlug]) existing[bid][subSlug] = {};
+        existing[bid][subSlug][cid] = { w: 1, ts: Date.now(), t: title };
+        localStorage.setItem(progressKey, JSON.stringify(existing));
+        // Save resume point
+        try {
+          const rk = 'gf_pw_resume';
+          const r = JSON.parse(localStorage.getItem(rk) || '{}');
+          r[bid] = { subSlug, childId: cid, title, subjectId: currentSubjectId, ts: Date.now() };
+          localStorage.setItem(rk, JSON.stringify(r));
+        } catch {}
+      } catch {}
+    };
+    video.addEventListener('timeupdate', () => {
+      if (video.duration && (video.currentTime / video.duration) > 0.75) markWatched();
+    });
+    video.addEventListener('ended', markWatched);
+    plyr.on('ended', markWatched);
+
     $('overlay').classList.add('hidden');
     document.title = title;
   } catch (e) {
