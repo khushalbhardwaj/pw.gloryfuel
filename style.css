@@ -128,7 +128,6 @@ header {
     position: relative;
     border: 1px solid var(--card-border);
     animation: cardIn .5s ease both;
-    content-visibility: auto;
 }
 
 @keyframes up {
