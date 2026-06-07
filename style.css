@@ -120,14 +120,16 @@ header {
 
 
 .card {
-    background: #111119;
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 18px;
+    background: var(--card-bg);
+    border-radius: 16px;
     overflow: hidden;
+    transition: transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .25s ease;
     cursor: pointer;
-    transition: transform 0.25s cubic-bezier(.34, 1.4, .64, 1), box-shadow 0.25s ease, border-color 0.25s ease;
-    animation: up 0.45s ease both;
     position: relative;
+    border: 1px solid var(--card-border);
+    animation: cardIn .5s ease both;
+    content-visibility: auto;
+    contain: content;
 }
 
 @keyframes up {

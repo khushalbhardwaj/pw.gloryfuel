@@ -3,10 +3,10 @@ async function apiFetch(url, opts = {}) {
   return fetch(url, opts);
 }
 
-// Resize + convert to WebP via free image proxy (thumbs load 5x faster)
 function optImg(url) {
-  // Just return URL as-is — CDNs allow all origins, no proxy needed
   if (!url || url.startsWith('/') || url.startsWith('data:')) return '';
+  // Request smaller thumbs from static.pw.live CDN if supported
+  if (url.includes('static.pw.live') && !url.includes('?')) url += '?w=400&q=75';
   return url;
 }
 function showLoad() { document.getElementById('loading-overlay').style.display = 'flex'; }
@@ -133,7 +133,7 @@ function renderBatches(batches, append) {
         <svg class="heart-filled" width="16" height="16" viewBox="0 0 24 24" fill="#fb7185"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
       </button>
       <div class="card-img">
-        <img src="${img}" alt="${name}" loading="lazy" decoding="async" referrerpolicy="no-referrer" onload="this.classList.add('loaded')" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📖</div>'">
+        <img src="${img}" alt="${name}" loading="lazy" decoding="async" fetchpriority="low" referrerpolicy="no-referrer" onload="this.classList.add('loaded')" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📖</div>'">
       </div>
       <div class="card-body">
         <div class="card-name">${name}</div>
