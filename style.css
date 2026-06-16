@@ -516,7 +516,6 @@ header {
 }
 #search-input::placeholder { color:rgba(255,255,255,0.25) }
 #search-input:focus { border-color:rgba(167,139,250,0.4) }
-
 /* ---- Maintenance Overlay ---- */
 .maint-overlay {
   position:fixed; inset:0; background:rgba(7,7,12,0.95); backdrop-filter:blur(12px);
@@ -680,6 +679,12 @@ header {
   z-index:2;
 }
 .card-img { position:relative }
+.footer {
+  text-align:center; padding:24px 20px 32px; color:rgba(255,255,255,0.25);
+  font-size:12px; border-top:1px solid rgba(255,255,255,0.04); margin-top:20px;
+}
+.footer-inner { display:flex; flex-direction:column; gap:4px; align-items:center }
+.footer strong { color:rgba(255,255,255,0.5); font-weight:600 }
 
 @media (max-width: 360px) {
     .grid { padding: 0 10px 30px }

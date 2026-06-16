@@ -110,7 +110,6 @@ function renderBatches(batches, append) {
     const name = b.name || 'Unknown Batch';
     const img = optImg(b.image || b.thumbnail || '');
     const isFav = favs.includes(bid);
-
     const card = document.createElement('div');
     card.className = `card${isFav ? ' fav-card' : ''}${!hasContent ? ' disabled-card' : ''}`;
     card.id = `card-${bid}`;
@@ -512,7 +511,6 @@ function categorizeBatches(batches) {
 
 // ---- INIT ----
 async function initApp() {
-  showLoad();
   const catFilter = document.getElementById('cat-filter');
   try {
     // Load batches from LearnByAKP API
@@ -557,7 +555,7 @@ async function checkNotification() {
     const data = await r.json();
     if (data.active && data.title) {
       document.getElementById('notif-popup-title').textContent = data.title;
-      document.getElementById('notif-popup-msg').innerHTML = data.message.replace(/\n/g, '<br>').replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#a78bfa;text-decoration:underline">$1</a>');
+      document.getElementById('notif-popup-msg').innerHTML = (data.message.replace(/\n/g, '<br>').replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color:#a78bfa;text-decoration:underline">$1</a>')) + '<br><br>— khushal (administrator)';
       document.getElementById('notif-popup').style.display = 'flex';
     }
   } catch {}
