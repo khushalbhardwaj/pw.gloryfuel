@@ -36,6 +36,11 @@ header {
     background-clip: text;
 }
 .brand-img { height:30px; width:auto; max-width:140px; display:block; object-fit:contain }
+.brand-name {
+  font-size:18px; font-weight:800; letter-spacing:-0.3px; margin-left:8px;
+  background:linear-gradient(120deg,#a78bfa,#e879f9,#fb923c);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+}
 
 .header-right { display:flex; align-items:center; gap:10px }
 .batch-count {
