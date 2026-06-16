@@ -421,6 +421,7 @@ function renderTopicContent(batchId, subjectSlug, topic, topicName, subjectId) {
         if (!Array.isArray(items) || items.length === 0) { container.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>📭</div><div>No content found</div></div>'; return; }
         container.innerHTML = '';
         if (contentType === 'videos') {
+          items.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
           items.forEach((item, i) => {
             const card = document.createElement('div');
             card.className = 'card';
