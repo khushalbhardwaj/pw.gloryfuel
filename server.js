@@ -129,8 +129,6 @@ function decryptAESGCM(encrypted) {
 
 // ---- Multi-source proxy with fallback ----
 const PROXY_SOURCES = [
-  { name: 'Delta Study (primary)', base: 'https://apiserver.deltastudy.site' },
-  { name: 'Delta Study (alt)',      base: 'https://deltastudy.site' },
   { name: 'LearnByAKP', base: 'https://learnbyakp.onrender.com', referer: 'https://learnbyakp.online/' },
 ];
 let sourceHealth = {};
@@ -1069,6 +1067,7 @@ app.post('/api/admin/maintenance', adminAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/favicon.ico', (req, res) => res.redirect('/logo.jpg'));
 app.use(express.static(path.join(__dirname)));
 
 module.exports = app;
