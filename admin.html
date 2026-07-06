@@ -178,6 +178,12 @@
         <span class="s-icon">🔔</span> Notification
       </button>
 
+      <div class="sidebar-heading" style="margin-top:8px">Video</div>
+      <button class="sidebar-item" data-view="pwaccess" onclick="switchView('pwaccess')">
+        <span class="s-icon">🎬</span> PW Video Access
+        <span class="s-count" id="pw-status-dot">?</span>
+      </button>
+
       <div class="sidebar-heading" style="margin-top:8px">Categories</div>
       <div id="sidebar-cats"></div>
 
@@ -264,6 +270,40 @@
           </div>
         </div>
       </div>
+
+      <!-- PW Video Access view -->
+      <div class="view" id="view-pwaccess">
+        <div class="dash-section">
+          <div class="dash-section-header">
+            <div class="icon" style="background:rgba(251,191,36,0.12)">🎬</div>
+            <h2>PW Video Access</h2>
+            <span class="badge" id="pw-status-badge">Unknown</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+            <div class="notif-card">
+              <h3 style="font-size:15px;font-weight:600;margin-bottom:14px">OTP Login</h3>
+              <label>Phone Number</label>
+              <input type="tel" id="pw-phone" placeholder="+91 9876543210">
+              <button class="btn-primary" onclick="pwSendOTP()" id="pw-send-btn">Send OTP</button>
+              <span id="pw-otp-status" class="notif-status"></span>
+              <div id="pw-verify-section" style="display:none;margin-top:12px">
+                <label>OTP Received</label>
+                <input type="text" id="pw-otp" placeholder="Enter OTP">
+                <button class="btn-primary" onclick="pwVerifyOTP()">Verify OTP</button>
+              </div>
+            </div>
+            <div class="notif-card">
+              <h3 style="font-size:15px;font-weight:600;margin-bottom:14px">Token Status</h3>
+              <div id="pw-status-detail">
+                <div style="font-size:13px;color:rgba(255,255,255,0.3)">No PW token loaded. Login with OTP above.</div>
+              </div>
+              <div style="margin-top:12px">
+                <button class="btn-danger" onclick="pwClear()" style="width:100%">Clear Token</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -299,9 +339,11 @@
       } else if (name === 'category' && extra) {
         const el = document.querySelector('.sidebar-item[data-cat="' + extra.replace(/"/g,'') + '"]');
         if (el) el.classList.add('active');
-      } else if (name === 'notification') {
-        document.querySelector('.sidebar-item[data-view="notification"]').classList.add('active');
+      } else {
+        const el = document.querySelector('.sidebar-item[data-view="' + name + '"]');
+        if (el) el.classList.add('active');
       }
+      if (name === 'pwaccess') updatePWStatus();
       if (window.innerWidth <= 768) toggleSidebar();
     }
 
@@ -498,7 +540,97 @@
       }
     }
 
-    if (token) { showDashboard(); }
+    // ---- PW Video Access ----
+    function updatePWStatus() {
+      fetch(ADMIN_BASE + '/api/admin/pw/status')
+        .then(r => r.json())
+        .then(data => {
+          const dot = document.getElementById('pw-status-dot');
+          const badge = document.getElementById('pw-status-badge');
+          const detail = document.getElementById('pw-status-detail');
+          if (data.loggedIn) {
+            const mins = Math.floor(data.remaining / 60);
+            dot.textContent = '✓';
+            dot.style.color = '#22c55e';
+            badge.textContent = 'Logged In';
+            badge.style.color = '#22c55e';
+            detail.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:rgba(255,255,255,0.4)">Status</span><span style="color:#22c55e;font-weight:600">Active</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:rgba(255,255,255,0.4)">Expires in</span><span style="color:rgba(255,255,255,0.7)">${mins} minutes</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:rgba(255,255,255,0.4)">Token length</span><span style="color:rgba(255,255,255,0.7)">${data.expiresAt ? 'Set' : 'N/A'}</span></div>
+            </div>`;
+          } else {
+            dot.textContent = '✗';
+            dot.style.color = '#6b7280';
+            badge.textContent = 'Not Logged In';
+            badge.style.color = '#6b7280';
+            detail.innerHTML = '<div style="font-size:13px;color:rgba(255,255,255,0.3)">No PW token loaded. Login with OTP above.</div>';
+          }
+        })
+        .catch(() => {
+          document.getElementById('pw-status-dot').textContent = '!';
+          document.getElementById('pw-status-dot').style.color = '#fb7185';
+        });
+    }
+
+    async function pwSendOTP() {
+      const phone = document.getElementById('pw-phone').value.trim();
+      const btn = document.getElementById('pw-send-btn');
+      const status = document.getElementById('pw-otp-status');
+      if (!phone) { status.textContent = 'Enter phone number'; return; }
+      btn.disabled = true;
+      btn.textContent = 'Sending...';
+      status.textContent = '';
+      try {
+        const r = await fetch(ADMIN_BASE + '/api/admin/pw/send-otp', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone })
+        });
+        const d = await r.json();
+        if (d.success) {
+          status.textContent = 'OTP sent!';
+          status.style.color = '#22c55e';
+          document.getElementById('pw-verify-section').style.display = 'block';
+        } else {
+          status.textContent = d.error || 'Failed to send OTP';
+          status.style.color = '#fb7185';
+        }
+      } catch (e) { status.textContent = 'Error: ' + e.message; status.style.color = '#fb7185'; }
+      btn.disabled = false;
+      btn.textContent = 'Send OTP';
+    }
+
+    async function pwVerifyOTP() {
+      const phone = document.getElementById('pw-phone').value.trim();
+      const otp = document.getElementById('pw-otp').value.trim();
+      const status = document.getElementById('pw-otp-status');
+      if (!phone || !otp) { status.textContent = 'Enter phone and OTP'; return; }
+      status.textContent = 'Verifying...';
+      status.style.color = '';
+      try {
+        const r = await fetch(ADMIN_BASE + '/api/admin/pw/verify-otp', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, otp })
+        });
+        const d = await r.json();
+        if (d.success) {
+          status.textContent = 'Logged in to PW!';
+          status.style.color = '#22c55e';
+          updatePWStatus();
+        } else {
+          status.textContent = d.error || 'Verification failed';
+          status.style.color = '#fb7185';
+        }
+      } catch (e) { status.textContent = 'Error: ' + e.message; status.style.color = '#fb7185'; }
+    }
+
+    function pwClear() {
+      fetch(ADMIN_BASE + '/api/admin/pw/clear', { method: 'POST' })
+        .then(() => { updatePWStatus(); })
+        .catch(() => {});
+    }
+
+    if (token) { showDashboard(); updatePWStatus(); }
   </script>
 </body>
 </html>

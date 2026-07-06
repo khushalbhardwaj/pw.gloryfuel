@@ -1,0 +1,51 @@
+I'm building a PW (Physics Wallah) education content viewer and need help finding a working method to proxy/stream PW video content.
+
+## What I Already Have (Working)
+- A Node.js/Express server with penpencil.co proxy using Android headers (Dalvik UA, client-type: MOBILE, client-id: ADMIN)
+- A hardcoded PW Bearer token: `eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJleHAiOjE3ODM2MTQxOTQuMzQxLCJkYXRhIjp7Il9pZCI6IjZhMmQ3NTBjYmRmMWQxZTM5YzE2ZDU5YyIsInVzZXJuYW1lIjoiNjM5MTA1MTI4MiIsImZpcnN0TmFtZSI6IkFrcCIsImxhc3ROYW1lIjoiIiwib3JnYW5pemF0aW9uIjp7Il9pZCI6IjVlYjM5M2VlOTVmYWI3NDY4YTc5ZDE4OSIsIndlYnNpdGUiOiJwaHlzaWNzd2FsbGFoLmNvbSIsIm5hbWUiOiJQaHlzaWNzd2FsbGFoIn0sInJvbGVzIjpbIjViMjdiZDk2NTg0MmY5NTBhNzc4YzZlZiJdLCJjb3VudHJ5R3JvdXAiOiJJTiIsIm9uZVJvbGVzIjpbXSwidHlwZSI6IlVTRVIifSwianRpIjoiemFUZ0FOQ3pTWjI2b1hwNEZWMkV6UV82YTJkNzUwY2JkZjFkMWUzOWMxNmQ1OWMiLCJpYXQiOjE3ODMwMDkzOTR9.akzuLzyKvndr8tarVoRFQX1g3zjdKCzEf2hbjh8hGrE`
+- Static batch list (8412 batches from JSON file)
+- Working endpoints: batch list, batch details (subjects), through penpencil proxy
+- AES-GCM decrypt (key: "maggikhalo") for encrypted payloads
+- AES-CBC decrypt (key: "638udh3829162018", IV: "fedcba9876543210") for live streams
+- Shaka Player (DASH + clearkey DRM) and HLS.js players
+- DRM pipeline: MPD → KID extraction → OTP endpoint for clearkey
+- Encryption keys from the LearnByAKP repo
+
+## What's NOT Working (Video)
+- PW video endpoints require a Bearer token from an account that has purchased the batch
+- Our token gives 403 "Unauthorised Scope Access" for video endpoints
+- The OTP endpoint (`/v1/videos/get-otp?key={KID}&isEncoded=true`) also returns 403
+
+## What I've Tried (All Dead Ends)
+- Delta Study (apiserver.deltastudy.site) → 500
+- LearnByAKP (learnbyakp.onrender.com) → video endpoints 404
+- pwthor.live → behind its own auth system (phone+OTP)
+- studypanda.in → outdated scraper, video 404
+- videos.iownprince5.workers.dev → 404
+- pw.modgalaxy.in → Cloudflare 1014
+- AllOrigins proxy → timed out
+
+## What I Have Access To
+- The PW Android API gateway (api.penpencil.co) with Android headers - works for browsing
+- The PW web API gateway (api.penpencil.co) with web headers
+- AES-GCM and AES-CBC encryption keys from public repos
+- Public player implementations (Shaka, HLS.js) with DRM support
+
+## Goal
+Find ANY working method to play PW videos without needing a PW account. This could be:
+1. An undocumented public API endpoint
+2. A proxy service that still works
+3. A way to bypass the Bearer token requirement
+4. A different API gateway/endpoint for videos
+5. Any cloudflare worker or proxy script someone has published
+6. The actual video delivery mechanism PW uses (maybe it doesn't always need auth?)
+
+## Key Questions
+1. Is there ANY public/working proxy service for PW videos that I haven't listed above?
+2. Can the PW video URL be obtained without a Bearer token using different headers or parameters?
+3. Are there GitHub repos with working PW video proxy code that I should look at?
+4. Does PW have a different video delivery system (e.g., direct CDN URLs that don't need auth)?
+5. Can the "Unauthorised Scope Access" error be bypassed by using different client-type or client-id headers?
+6. Is there a way to extract video URLs from the PW Android app's API that doesn't require the Bearer token?
+
+Please provide specific, actionable solutions - not general advice.

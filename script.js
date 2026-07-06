@@ -298,7 +298,7 @@ function renderSubjects(batchId) {
         let html = '';
         const resume = getBatchResume(batchId);
         if (resume) {
-          const resumeUrl = `https://pwthor.live/watch?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(resume.childId)}&subjectSlug=${encodeURIComponent(resume.subSlug)}${resume.subjectId ? '&subjectId='+encodeURIComponent(resume.subjectId) : ''}&title=${encodeURIComponent(resume.title)}`;
+          const resumeUrl = `/player.html?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(resume.childId)}&subjectSlug=${encodeURIComponent(resume.subSlug)}${resume.subjectId ? '&subjectId='+encodeURIComponent(resume.subjectId) : ''}&title=${encodeURIComponent(resume.title)}`;
           html += `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;margin-bottom:10px;background:rgba(167,139,250,0.12);border-radius:10px;cursor:pointer" onclick="window.location.href='${resumeUrl}'"><div style="font-size:20px">▶️</div><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${resume.title}</div><div style="font-size:11px;color:rgba(255,255,255,0.3)">${new Date(resume.ts).toLocaleDateString()}</div></div><div style="font-size:12px;color:#a78bfa;font-weight:600">Resume</div></div>`;
         }
         html += subjects.filter(s => (s.lectureCount || s.videoCount || 0) > 0).map(s => {
@@ -355,7 +355,7 @@ function renderTodayClasses(batchId) {
         card.className = 'card';
         card.style.animationDelay = `${i * 0.07}s`;
         const tcTitle = item.topic || "Today's Class";
-        card.onclick = () => window.location.href = `https://pwthor.live/watch?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(item.childId)}&subjectId=${encodeURIComponent(item.subjectId)}&subjectSlug=${encodeURIComponent(item.subjectSlug)}&title=${encodeURIComponent(tcTitle)}`;
+        card.onclick = () => window.location.href = `/player.html?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(item.childId)}&subjectId=${encodeURIComponent(item.subjectId)}&subjectSlug=${encodeURIComponent(item.subjectSlug)}&title=${encodeURIComponent(tcTitle)}`;
         const timeStr = item.startTime ? (item.startTime.includes('T') ? item.startTime.slice(11, 16) : item.startTime.slice(0, 5)) : '';
         card.innerHTML = `<div class="card-img"><div class="no-img" style="font-size:40px">📅</div></div><div class="card-body"><div class="card-name">${item.topic || 'Today\'s Class'}</div><div style="color:rgba(255,255,255,0.4);font-size:12px"><span>📘 ${item.subject}</span><span style="margin-left:12px">🕐 ${timeStr}</span></div></div>`;
         grid.appendChild(card);
@@ -412,7 +412,7 @@ function renderTopicContent(batchId, subjectSlug, topic, topicName, subjectId) {
   function loadContent(contentType) {
     container.innerHTML = '';
     showLoad();
-    apiFetch(`${API_BASE}/study/datacontent?batchId=${encodeURIComponent(batchId)}&subjectSlug=${encodeURIComponent(subjectSlug)}&topicSlug=${encodeURIComponent(topic.slug)}&contentType=${encodeURIComponent(contentType)}`)
+                    apiFetch(`${API_BASE}/study/datacontent?batchId=${encodeURIComponent(batchId)}&subjectId=${encodeURIComponent(subjectId || subjectSlug)}&topicSlug=${encodeURIComponent(topic.slug)}&contentType=${encodeURIComponent(contentType)}`)
       .then(r => r.json())
       .then(data => {
         hideLoad();
@@ -428,7 +428,7 @@ function renderTopicContent(batchId, subjectSlug, topic, topicName, subjectId) {
             card.style.animationDelay = `${i * 0.07}s`;
             const childId = item.videoDetails?.findKey || item._id;
             const videoTitle = item.topic || 'Untitled';
-            const watchUrl = `https://pwthor.live/watch?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(childId)}&subjectId=${encodeURIComponent(subjectId || '')}&subjectSlug=${encodeURIComponent(subjectSlug)}&topicSlug=${encodeURIComponent(topic.slug)}&title=${encodeURIComponent(videoTitle)}`;
+            const watchUrl = `/player.html?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(childId)}&subjectId=${encodeURIComponent(subjectId || '')}&subjectSlug=${encodeURIComponent(subjectSlug)}&topicSlug=${encodeURIComponent(topic.slug)}&title=${encodeURIComponent(videoTitle)}`;
             card.onclick = () => window.location.href = watchUrl;
             const w = isWatched(batchId, subjectSlug, childId);
             card.innerHTML = `<div class="card-img"><img src="${optImg(item.videoDetails?.image || item.image || '')}" alt="${videoTitle}" referrerpolicy="no-referrer" onload="this.classList.add('loaded')" onerror="this.parentElement.innerHTML='<div class=\\'no-img\\'>📹</div>'">${w ? '<div class="watched-badge">✓</div>' : ''}</div><div class="card-body"><div class="card-name">${videoTitle}</div><div style="display:flex;gap:12px;color:rgba(255,255,255,0.4);font-size:12px"><span>📅 ${(item.date || '').split('T')[0]}</span><span>⏱ ${item.duration || item.videoDetails?.duration || ''}</span></div></div>`;
