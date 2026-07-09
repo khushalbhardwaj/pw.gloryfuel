@@ -1,134 +1,216 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>GloryFuel Player</title>
-<script src="https://cdn.jsdelivr.net/npm/shaka-player@4/dist/shaka-player.compiled.js"></script>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-:root{--accent:#a78bfa;--bg:#0a0b12}
-body{background:var(--bg);color:#eef0ff;font-family:system-ui,sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
-#player-wrap{position:relative;width:100%;flex:1;background:#000;display:flex;align-items:center;justify-content:center}
-video{width:100%;height:100%;object-fit:contain}
-#loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:20;background:rgba(0,0,0,.6)}
-#loader .sp{width:36px;height:36px;border:3px solid rgba(255,255,255,.1);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
-#loader .lt{font-size:14px;color:rgba(255,255,255,.5);margin-top:10px}
-@keyframes spin{to{transform:rotate(360deg)}}
-#error{position:absolute;inset:0;z-index:25;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.75);flex-direction:column;gap:12px;display:none}
-#error .icon{font-size:40px;opacity:.6}
-#error .msg{font-size:15px;color:rgba(255,255,255,.5);max-width:300px;text-align:center}
-#error button{background:var(--accent);color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:14px}
-#title-bar{position:absolute;top:0;left:0;right:0;padding:40px 16px 20px;background:linear-gradient(rgba(0,0,0,.7),transparent);z-index:5}
-#title-bar h2{font-size:15px;font-weight:600;line-height:1.3}
-#controls{padding:8px 12px;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.03)}
-#controls button{background:rgba(255,255,255,.08);border:none;color:rgba(255,255,255,.85);cursor:pointer;padding:6px 12px;border-radius:6px;font-size:13px}
-#controls button:hover{background:rgba(255,255,255,.15)}
-#status{font-size:12px;color:rgba(255,255,255,.4)}
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GloryFuel PW Player</title>
+  <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0f; color: #e0e0e0; font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    .container { width: 100%; max-width: 960px; padding: 20px; }
+    header { padding: 20px 0; text-align: center; }
+    header h1 { font-size: 1.3rem; color: #a78bfa; font-weight: 600; letter-spacing: 0.02em; }
+    header h1 span { color: #f59e0b; }
+    .player-wrapper { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 12px; overflow: hidden; }
+    .player-wrapper plyr { width: 100%; height: 100%; }
+    .info-panel { margin-top: 24px; background: #12121a; border-radius: 12px; padding: 20px; border: 1px solid #1f1f2e; }
+    .info-panel h2 { font-size: 1rem; color: #a78bfa; margin-bottom: 12px; font-weight: 500; }
+    .info-panel .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.85rem; border-bottom: 1px solid #1a1a28; }
+    .info-panel .row:last-child { border-bottom: none; }
+    .info-panel .label { color: #6b7280; }
+    .info-panel .value { color: #e0e0e0; word-break: break-all; text-align: right; max-width: 70%; }
+    .error-box { background: #2d1b1b; border: 1px solid #5c2a2a; border-radius: 8px; padding: 16px; margin-top: 20px; color: #fca5a5; font-size: 0.9rem; }
+    .loading { text-align: center; padding: 40px 0; color: #6b7280; }
+    .loading .spinner { width: 32px; height: 32px; border: 3px solid #1f1f2e; border-top-color: #a78bfa; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .controls-row { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+    .btn { padding: 8px 16px; border-radius: 8px; border: none; font-size: 0.85rem; cursor: pointer; font-weight: 500; transition: all 0.15s; }
+    .btn-primary { background: #7c3aed; color: #fff; }
+    .btn-primary:hover { background: #6d28d9; }
+    .btn-secondary { background: #1f1f2e; color: #a78bfa; border: 1px solid #2d2d45; }
+    .btn-secondary:hover { background: #2d2d45; }
+    .hls-debug { margin-top: 16px; padding: 12px; background: #0d0d15; border-radius: 8px; font-family: monospace; font-size: 0.75rem; color: #6b7280; max-height: 200px; overflow-y: auto; }
+    .hls-debug .log-entry { padding: 2px 0; }
+    .footer { margin-top: 40px; padding: 20px 0; text-align: center; font-size: 0.75rem; color: #3f3f55; }
+  </style>
 </head>
 <body>
-<div id="player-wrap">
-  <video id="video" playsinline autoplay controls></video>
-  <div id="title-bar"><h2 id="videoTitle">Loading...</h2></div>
-  <div id="loader"><div style="text-align:center"><div class="sp"></div><div class="lt" id="loadText">Loading video...</div></div></div>
-  <div id="error"><div class="icon">&#9888;</div><div class="msg" id="errMsg">Video not available</div><button onclick="location.reload()">Retry</button></div>
-</div>
-<div id="controls">
-  <button onclick="window.history.back()">&#8592; Back</button>
-  <span id="status"></span>
-</div>
-<script>
-shaka.polyfill.installAll();
+  <div class="container">
+    <header>
+      <h1>GloryFuel <span>PW</span></h1>
+    </header>
 
-const params = new URLSearchParams(location.search);
-const batchId = params.get('batchId');
-const childId = params.get('childId');
-const subjectSlug = params.get('subjectSlug') || params.get('subjectId') || '';
-const title = params.get('title') || 'Lecture';
-const video = document.getElementById('video');
-const loader = document.getElementById('loader');
-const errorEl = document.getElementById('error');
-const loadText = document.getElementById('loadText');
-const statusEl = document.getElementById('status');
-document.getElementById('videoTitle').textContent = title;
-document.title = title;
+    <div id="loading" class="loading" style="display:none">
+      <div class="spinner"></div>
+      <div>Loading video...</div>
+    </div>
 
-function showError(msg) {
-  loader.style.display = 'none';
-  document.getElementById('errMsg').textContent = msg || 'Video not available';
-  errorEl.style.display = 'flex';
-}
+    <div id="error" class="error-box" style="display:none"></div>
 
-function setStatus(s) { statusEl.textContent = s; }
+    <div class="player-wrapper" id="playerWrapper" style="display:none">
+      <video id="player" playsinline controls></video>
+    </div>
 
-async function playVideo() {
-  if (!batchId || !childId) {
-    showError('Missing video parameters');
-    return;
-  }
-  try {
-    // Step 1: Get signed video URL
-    loadText.textContent = 'Getting video URL...';
-    let url = `/api/study/video-url?batchId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(childId)}`;
-    if (subjectSlug) url += `&subjectSlug=${encodeURIComponent(subjectSlug)}`;
-    const urlResp = await fetch(url);
-    const urlData = await urlResp.json();
-    if (!urlData.success || !urlData.data || !urlData.data.length) {
-      showError('Video URL not available');
-      return;
-    }
-    const signedUrl = urlData.data[0].url;
-    if (!signedUrl) { showError('No signed URL returned'); return; }
-    setStatus('Got signed URL');
+    <div id="infoPanel" class="info-panel" style="display:none">
+      <h2>Stream Info</h2>
+      <div class="row"><span class="label">Title</span><span class="value" id="infoTitle">—</span></div>
+      <div class="row"><span class="label">Quality</span><span class="value" id="infoQuality">—</span></div>
+      <div class="row"><span class="label">Source</span><span class="value" id="infoSource">—</span></div>
+      <div class="row"><span class="label">DRM</span><span class="value" id="infoDrm">—</span></div>
+      <div class="controls-row">
+        <button class="btn btn-secondary" id="btnReconnect" onclick="location.reload()">Reload</button>
+      </div>
+    </div>
 
-    // Step 2: Get MPD and extract KID
-    loadText.textContent = 'Getting decryption key...';
-    const kidResp = await fetch(`/api/study/kid?mpdUrl=${encodeURIComponent(signedUrl)}`);
-    const kidData = await kidResp.json();
-    if (!kidData.success || !kidData.kid) {
-      showError('Failed to get KID');
-      return;
-    }
-    const kid = kidData.kid;
-    setStatus('KID: ' + kid.substring(0, 8) + '...');
+    <div id="debugPanel" class="hls-debug" style="display:none">
+      <div id="debugLog"></div>
+    </div>
 
-    // Step 3: Get decryption key via OTP
-    const otpResp = await fetch(`/api/study/otp?kid=${encodeURIComponent(kid)}`);
-    const otpData = await otpResp.json();
-    if (!otpData.success || !otpData.key) {
-      showError('Failed to get decryption key');
-      return;
-    }
-    const decKey = otpData.key;
-    setStatus('Got decryption key');
+    <div class="footer">gloryfuel.fun — powered by PiMaxer</div>
+  </div>
 
-    // Step 4: Configure Shaka with clear key
-    loadText.textContent = 'Starting playback...';
-    if (!shaka.Player.isBrowserSupported()) {
-      showError('DASH not supported in this browser');
-      return;
+  <script src="https://cdn.plyr.io/3.7.8/plyr.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const batchId = params.get('batchId');
+    const childId = params.get('childId');
+
+    if (!batchId || !childId) {
+      document.getElementById('loading').style.display = 'none';
+      const err = document.getElementById('error');
+      err.style.display = 'block';
+      err.textContent = 'Missing query parameters: ?batchId=...&childId=...';
+    } else {
+      loadVideo(batchId, childId);
     }
 
-    const player = new shaka.Player(video);
-    player.configure({
-      drm: {
-        clearKeys: { [kid]: decKey }
+    function log(msg) {
+      const panel = document.getElementById('debugPanel');
+      panel.style.display = 'block';
+      const log = document.getElementById('debugLog');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      entry.textContent = `[${new Date().toISOString().slice(11,19)}] ${msg}`;
+      log.appendChild(entry);
+      panel.scrollTop = panel.scrollHeight;
+    }
+
+    async function loadVideo(batchId, childId) {
+      const loading = document.getElementById('loading');
+      const error = document.getElementById('error');
+      const infoPanel = document.getElementById('infoPanel');
+      const playerWrapper = document.getElementById('playerWrapper');
+
+      const setInfo = (id, val) => document.getElementById(id).textContent = val || '—';
+
+      loading.style.display = 'block';
+      error.style.display = 'none';
+
+      try {
+        log('Fetching video URL from PiMaxer API...');
+        const apiUrl = `https://api.pimaxer.in/v1/videos/video-url-details?parentId=${encodeURIComponent(batchId)}&childId=${encodeURIComponent(childId)}`;
+        log(`GET ${apiUrl}`);
+
+        const res = await fetch(apiUrl);
+        if (!res.ok) throw new Error(`API returned ${res.status} ${res.statusText}`);
+        const data = await res.json();
+        log('API response received');
+
+        if (!data.success || !data.data) throw new Error('API returned unsuccessful response');
+        const { url, drmDetails, urlType, title } = data.data;
+
+        console.log('PiMaxer response:', data.data);
+
+        const mpdUrl = url;
+        const hlsUrl = mpdUrl.replace(/\.mpd$/, '.m3u8');
+        log(`HLS URL: ${hlsUrl}`);
+
+        setInfo('infoTitle', title || childId);
+        setInfo('infoSource', hlsUrl.replace(/https?:\/\//, ''));
+        setInfo('infoDrm', drmDetails ? `${drmDetails.drmType || 'Clearkey'}` : 'None');
+        setInfo('infoQuality', urlType || 'HLS');
+
+        loading.style.display = 'none';
+        infoPanel.style.display = 'block';
+        playerWrapper.style.display = 'block';
+
+        initPlayer(hlsUrl, drmDetails, childId);
+
+      } catch (err) {
+        loading.style.display = 'none';
+        error.style.display = 'block';
+        error.innerHTML = `<strong>Error:</strong> ${err.message}`;
+        log(`ERROR: ${err.message}`);
       }
-    });
+    }
 
-    // Step 5: Load via MPD proxy
-    const mpdUrl = `/api/study/mpd?url=${encodeURIComponent(signedUrl)}`;
-    await player.load(mpdUrl);
-    loader.style.display = 'none';
-    video.play().catch(() => {});
-    setStatus('Playing');
-  } catch (e) {
-    showError('Playback failed: ' + e.message);
-  }
-}
+    function initPlayer(hlsUrl, drmDetails, childId) {
+      const video = document.getElementById('player');
 
-playVideo();
-</script>
+      if (Hls.isSupported()) {
+        const hls = new Hls({
+          debug: false,
+          enableWorker: true,
+          lowLatencyMode: true,
+          fragLoadingMaxRetry: 5,
+          manifestLoadingMaxRetry: 3,
+          levelLoadingMaxRetry: 3,
+        });
+
+        hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+          log(`Manifest parsed: ${data.levels.length} quality levels`);
+          const levels = hls.levels;
+          const qualStr = levels.map((l, i) => `${l.height}p`).join(', ');
+          document.getElementById('infoQuality').textContent = qualStr || 'Auto';
+        });
+
+        hls.on(Hls.Events.ERROR, (event, data) => {
+          if (data.fatal) {
+            log(`Fatal HLS error: ${data.type} - ${data.details}`);
+          } else {
+            log(`HLS error (non-fatal): ${data.details}`);
+          }
+        });
+
+        hls.loadSource(hlsUrl);
+        hls.attachMedia(video);
+
+        const player = new Plyr(video, {
+          controls: [
+            'play-large', 'play', 'progress', 'current-time', 'duration',
+            'mute', 'volume', 'settings', 'fullscreen'
+          ],
+          settings: ['quality', 'speed'],
+          speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 2] },
+          quality: { default: 720 },
+          keyboard: { focused: true, global: true },
+          tooltips: { controls: true, seek: true },
+          invertTime: false,
+          resetOnEnd: false,
+          clickToPlay: true,
+          disableContextMenu: true,
+        });
+
+        window.player = player;
+        window.hls = hls;
+        log('Plyr + HLS.js initialized');
+
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = hlsUrl;
+        const player = new Plyr(video, {
+          controls: ['play-large', 'play', 'progress', 'current-time', 'duration', 'mute', 'volume', 'settings', 'fullscreen'],
+          invertTime: false,
+        });
+        window.player = player;
+        log('Native HLS support (Safari)');
+      } else {
+        log('ERROR: HLS not supported in this browser');
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = 'HLS playback not supported in this browser. Try Chrome or Firefox.';
+      }
+    }
+  </script>
 </body>
 </html>

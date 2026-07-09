@@ -1,103 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="referrer" content="no-referrer">
-    <link rel="icon" type="image/jpeg" href="logo.jpg">
-    <title>gloryfuel -PW</title>
-    <link rel="preconnect" href="https://static.pw.live">
-    <link rel="dns-prefetch" href="https://static.pw.live">
-    <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GloryFuel PW</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0a0f; color: #e0e0e0; font-family: system-ui, -apple-system, sans-serif; min-height: 100vh; }
+    .container { max-width: 960px; margin: 0 auto; padding: 20px; }
+    header { text-align: center; padding: 40px 0 32px; }
+    header h1 { font-size: 2rem; font-weight: 700; }
+    header h1 span:first-child { color: #a78bfa; }
+    header h1 span:last-child { color: #f59e0b; }
+    header p { color: #6b7280; margin-top: 8px; font-size: 0.9rem; }
+    .card { background: #12121a; border: 1px solid #1f1f2e; border-radius: 12px; padding: 24px; margin-bottom: 16px; transition: border-color 0.2s, background 0.2s; cursor: pointer; }
+    .card:hover { border-color: #7c3aed; background: #18182a; }
+    .card h2 { font-size: 1.1rem; color: #a78bfa; font-weight: 600; }
+    .card p { color: #6b7280; font-size: 0.85rem; margin-top: 4px; }
+    .card .meta { display: flex; gap: 16px; margin-top: 12px; font-size: 0.75rem; color: #4b4b5e; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 20px; border-radius: 8px; border: none; font-size: 0.85rem; cursor: pointer; font-weight: 500; transition: all 0.15s; text-decoration: none; }
+    .btn-primary { background: #7c3aed; color: #fff; }
+    .btn-primary:hover { background: #6d28d9; }
+    .btn-secondary { background: #1f1f2e; color: #a78bfa; border: 1px solid #2d2d45; }
+    .btn-secondary:hover { background: #2d2d45; }
+    .empty { text-align: center; padding: 60px 0; color: #4b4b5e; }
+    .footer { text-align: center; padding: 40px 0; font-size: 0.75rem; color: #3f3f55; }
+    .player-link { display: inline-block; margin-top: 12px; }
+    input, select { background: #0d0d15; border: 1px solid #1f1f2e; color: #e0e0e0; padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; width: 100%; outline: none; }
+    input:focus, select:focus { border-color: #7c3aed; }
+    label { display: block; font-size: 0.8rem; color: #6b7280; margin-bottom: 4px; }
+    .form-group { margin-bottom: 16px; }
+    .manual-section { background: #12121a; border: 1px solid #1f1f2e; border-radius: 12px; padding: 24px; margin-top: 24px; }
+    .manual-section h3 { color: #a78bfa; font-size: 1rem; font-weight: 500; margin-bottom: 16px; }
+  </style>
 </head>
-
 <body>
+  <div class="container">
     <header>
-        <button id="nav-back-btn" class="nav-back-btn" style="display:none">←</button>
-        <img class="brand-img" src="logo.jpg" alt="gloryfuel">
-        <span class="brand-name">Gloryfuel</span>
-        <div class="header-right">
-          <button id="about-btn" onclick="location.href='about.html'">About</button>
-          <div class="batch-count">0 batches</div>
-          <button id="fav-nav-btn" onclick="showFavourites()" title="Favourites">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
-            <span id="fav-count">0</span>
-          </button>
-        </div>
+      <h1><span>GloryFuel</span> <span>PW</span></h1>
+      <p>Physics Wallah video player — powered by PiMaxer</p>
     </header>
-    <div class="page-title">choose your
-        <span>batch</span>
-    </div>
-    <div id="cat-filter" style="display:none;padding:0 28px 10px">
-      <select id="cat-select">
-        <option value="All">All Categories</option>
-      </select>
-      <input type="text" id="search-input" placeholder="Search batches..." autocomplete="off">
-    </div>
-    <div class="section-label" id="all-label">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2">
-            <rect x="3" y="3" width="7" height="7" rx="1"></rect>
-            <rect x="14" y="3" width="7" height="7" rx="1"></rect>
-            <rect x="3" y="14" width="7" height="7" rx="1"></rect>
-            <rect x="14" y="14" width="7" height="7" rx="1"></rect>
-        </svg>
-        All Batches
-    </div>
-    <div id="loading-overlay" class="loading-overlay" style="display:none">
-      <div class="spinner"></div>
-    </div>
-    <div class="grid" id="all-grid"></div>
 
-    <div id="notif-popup" class="notif-popup" style="display:none">
-      <div class="notif-popup-inner">
-        <div class="notif-popup-close" onclick="dismissNotif()">&times;</div>
-        <div class="notif-popup-title" id="notif-popup-title"></div>
-        <div class="notif-popup-msg" id="notif-popup-msg"></div>
+    <div id="batches"></div>
+
+    <div class="manual-section">
+      <h3>Manual URL Builder</h3>
+      <div class="form-group">
+        <label for="batchId">Batch ID (parentId)</label>
+        <input type="text" id="batchId" placeholder="e.g. 67a2fa1daa42be00186a95c1" />
       </div>
-    </div>
-
-    <div id="maint-overlay" class="maint-overlay" style="display:none">
-      <div class="maint-box">
-        <div class="maint-icon">🛠</div>
-        <div class="maint-title">Under Maintenance</div>
-        <div class="maint-msg" id="maint-msg">Site is under maintenance. Please check back later.</div>
+      <div class="form-group">
+        <label for="childId">Schedule ID (childId)</label>
+        <input type="text" id="childId" placeholder="e.g. 67b3c9e30b847c0018687af1" />
       </div>
+      <button class="btn btn-primary" onclick="openPlayer()">Open Player</button>
     </div>
 
-    <!-- Watch / Download Modal -->
-    <div id="wd-modal" class="wd-modal" style="display:none" onclick="closeWDDialog()">
-      <div class="wd-dialog" onclick="event.stopPropagation()">
-        <div class="wd-close" onclick="closeWDDialog()">&times;</div>
-        <div id="wd-action-view">
-          <div class="wd-icon">🎬</div>
-          <div class="wd-title" id="wd-title">Video</div>
-          <div class="wd-actions">
-            <button class="wd-btn wd-watch" id="wd-watch-btn">▶ Watch</button>
-            <button class="wd-btn wd-dl" id="wd-dl-btn">⬇ Download</button>
-          </div>
-        </div>
-        <div id="wd-quality-view" style="display:none">
-          <div class="wd-icon">⚙️</div>
-          <div class="wd-title">Choose quality</div>
-          <div class="wd-quality-list" id="wd-quality-list"></div>
-          <div class="wd-actions" style="margin-top:14px">
-            <button class="wd-btn wd-dl" id="wd-back-btn" style="flex:1">← Back</button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div class="footer">gloryfuel.fun</div>
+  </div>
 
-    <div class="footer">
-      <div class="footer-inner">
-        <span>Designed & Developed by <strong>Khushal</strong></span>
-        <span>© 2026 Gloryfuel</span>
-      </div>
-    </div>
+  <script>
+    async function loadBatches() {
+      const container = document.getElementById('batches');
+      container.innerHTML = '<div class="empty">Loading batches...</div>';
+    }
 
-    <script src="config.js"></script>
-    <script src="script.js"></script>
+    function openPlayer(batchId, childId) {
+      const b = batchId || document.getElementById('batchId').value.trim();
+      const c = childId || document.getElementById('childId').value.trim();
+      if (!b || !c) return alert('Enter both Batch ID and Schedule ID');
+      window.open(`/player.html?batchId=${encodeURIComponent(b)}&childId=${encodeURIComponent(c)}`, '_blank');
+    }
+
+    loadBatches();
+  </script>
 </body>
-
 </html>
